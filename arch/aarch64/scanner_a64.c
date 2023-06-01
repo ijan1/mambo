@@ -949,6 +949,7 @@ size_t scan_a64(dbm_thread *thread_data, uint32_t *read_address,
       case A64_SWP:
       case A64_SYS:
       case A64_LRCPC:
+      case A64_LRCPC2:
         a64_copy();
         break;
 
