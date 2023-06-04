@@ -5,3 +5,5 @@ elf/elf_loader.o
 elf/symbol_parser.o
 .vscode/
 *.swp
+.cache
+compile_commands.json
