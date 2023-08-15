@@ -1,0 +1,8 @@
+insn:00006000
+cs_disas:N/A
+libopcodes_disas:.inst	0x00006000 ; undefined
+instructions_checked:24576
+instructions_skipped:0
+instructions_filtered:0
+hidden_instructions_found:0
+instructions_per_sec:2574
