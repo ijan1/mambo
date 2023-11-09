@@ -18,6 +18,7 @@
   limitations under the License.
 */
 
+#include <libelf.h>
 #include <stdbool.h>
 
 #ifdef __arm__
@@ -25,8 +26,10 @@
   #define EM_MACHINE EM_ARM
   #define ELF_EHDR   Elf32_Ehdr
   #define ELF_PHDR   Elf32_Phdr
+  #define ELF_SHDR   Elf32_Shdr
   #define ELF_GETEHDR(...) elf32_getehdr(__VA_ARGS__)
   #define ELF_GETPHDR(...) elf32_getphdr(__VA_ARGS__)
+  #define ELF_GETSHDR(...) elf32_getshdr(__VA_ARGS__)
   #define ELF_AUXV_T Elf32_auxv_t
 #endif
 #ifdef __aarch64__
@@ -34,9 +37,22 @@
   #define EM_MACHINE EM_AARCH64
   #define ELF_EHDR   Elf64_Ehdr
   #define ELF_PHDR   Elf64_Phdr
+  #define ELF_SHDR   Elf64_Shdr
   #define ELF_GETEHDR(...) elf64_getehdr(__VA_ARGS__)
   #define ELF_GETPHDR(...) elf64_getphdr(__VA_ARGS__)
+  #define ELF_GETSHDR(...) elf64_getshdr(__VA_ARGS__)
   #define ELF_AUXV_T Elf64_auxv_t
+#endif
+
+/* Both Elf32_Sym and Elf64_Sym use the same one-byte st_info field, however we
+   do this because uhhhhhhhhhhhhhhhhhh */
+#ifndef ELF_ST_TYPE
+  #ifdef __arm__
+    #define ELF_ST_TYPE(val) ELF_32_ST_TYPE(val)
+  #endif
+  #ifdef __aarch64__
+    #define ELF_ST_TYPE(val) ELF_64_ST_TYPE(val)
+  #endif
 #endif
 
 struct elf_loader_auxv {

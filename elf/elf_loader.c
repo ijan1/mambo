@@ -126,31 +126,31 @@ void load_elf(char *filename, Elf **ret_elf, struct elf_loader_auxv *auxv, uintp
     printf("Couldn't open file %s\n", filename);
     exit(EXIT_FAILURE);
   }
-  
+
   if (elf_version(EV_CURRENT) == EV_NONE) {
     printf("Error setting ELF version\n");
     exit(EXIT_FAILURE);
   }
-  
+
   elf = elf_begin(fd, ELF_C_READ, NULL);
   *ret_elf = elf;
   if (elf == NULL) {
     printf("Error opening ELF file: %s: %s\n", filename, elf_errmsg(-1));
     exit(EXIT_FAILURE);
   }
-  
+
   kind = elf_kind(elf);
   if (kind != ELF_K_ELF) {
     printf("File %s isn't an ELF file\n", filename);
     exit(EXIT_FAILURE);
   }
-  
+
   ehdr = ELF_GETEHDR(elf);
   if (ehdr == NULL) {
     printf("Error reading the ELF executable header: %s\n", elf_errmsg(-1));
     exit(EXIT_FAILURE);
   }
-  
+
   if (ehdr->e_ident[EI_CLASS] != ELF_CLASS) {
     printf("Not a 32-bit ELF file\n");
     exit(EXIT_FAILURE);
@@ -211,23 +211,23 @@ void load_elf(char *filename, Elf **ret_elf, struct elf_loader_auxv *auxv, uintp
     if (phdr[i].p_type == PT_INTERP) {
       debug("INTERP field found\n");
       assert(!is_interp);
-      
+
       if (phdr[i].p_filesz > 255) {
         printf("INTERP filename longer than the buffer\n");
         while(1);
       }
-      
+
       if (fseek(file, phdr[i].p_offset, SEEK_SET) != 0) {
         printf("Seek to INTERP field failed");
         while(1);
       }
-      
+
       if(fread(interp, sizeof(char), phdr[i].p_filesz, file) != phdr[i].p_filesz) {
         printf("Failed reading INTERP string\n");
         while(1);
       }
       interp[phdr[i].p_filesz] = '\0';
-      
+
       load_elf(interp, ret_elf, auxv, entry_addr, true);
     }
   }
@@ -248,7 +248,7 @@ void load_elf(char *filename, Elf **ret_elf, struct elf_loader_auxv *auxv, uintp
     debug("p_memsz: 0x%x\n", phdr[i].p_memsz);
     debug("p_flags: 0x%x\n", phdr[i].p_flags);
     debug("p_align: 0x%x\n", phdr[i].p_align);
-    
+
     switch(phdr[i].p_type) {
       case PT_LOAD:
         load_segment((uintptr_t)base_addr, &phdr[i], fd, ehdr->e_type, is_interp);
@@ -338,14 +338,14 @@ void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, cha
     stack_push((uintptr_t)copy_string_to_stack(argv[i], &stack_strings));
   }
   stack_push((uintptr_t)NULL);
-  
+
   // Copy env
   while (*envp != NULL) {
     stack_push((uintptr_t)copy_string_to_stack(*envp, &stack_strings));
     envp++;
   }
   stack_push((uintptr_t)NULL);
-  
+
   // Copy the Auxiliary Vector
   ELF_AUXV_T *s_aux = (ELF_AUXV_T *)(envp + 1);
   ELF_AUXV_T *d_aux = (ELF_AUXV_T *)&stack[stack_i];
@@ -404,7 +404,7 @@ void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, cha
 
       case AT_ENTRY:
         d_aux->a_un.a_val = auxv->at_entry;
-        break;  
+        break;
 
       default:
         #ifdef __arm__
@@ -416,7 +416,7 @@ void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, cha
         exit(EXIT_FAILURE);
         break;
     }
-    
+
     s_aux++;
     d_aux++;
 
@@ -447,7 +447,7 @@ void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, cha
   assert((char *)&stack[stack_i] <= stack_strings);
 
   dbm_client_entry(entry_address, &stack[0]);
-  
+
   // If we return here, something is horribly wrong
   while(1);
 }

@@ -1,6 +1,11 @@
+.gitignore
+compile_commands.json
+.cache
+gitignore
 dbm
 api/emit_*.c
 api/emit_*.h
 elf/elf_loader.o
 elf/symbol_parser.o
+*.swp
 .vscode/
