@@ -25,7 +25,7 @@ OPTS+=-DDBM_TRACES #-DTB_AS_TRACE_HEAD #-DBLXI_AS_TRACE_HEAD
 #OPTS+=-DCC_HUGETLB -DMETADATA_HUGETLB
 
 VERSION?=$(shell git describe --abbrev=8 --dirty --always || echo '\<nogit\>')
-CFLAGS+=-D_GNU_SOURCE -g -std=gnu99 -O2 -Wunused-variable
+CFLAGS+=-D_GNU_SOURCE -g -std=gnu99 -O2 -Wunused-variable -DMJAO
 CFLAGS+=-DVERSION=\"$(VERSION)\"
 
 LDFLAGS+=-static -ldl

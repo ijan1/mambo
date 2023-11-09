@@ -16,6 +16,15 @@ extern void function_watch_try_addp(watched_functions_t *self, char *name,
 
 static func_vtable_t global_vtable;
 
+// TODO: don't use global data, the context has vm info
+// ctx.vm.op = op;
+// ctx.vm.addr = (void *)addr;
+// ctx.vm.size = size;
+// ctx.vm.prot = prot;
+// ctx.vm.flags = flags;
+// ctx.vm.filedes = fd;
+// ctx.vm.off = off;
+
 func_t init_func(char *name) {
   uintptr_t addr = interval_map_search_by_name(&global_data.exec_allocs, name);
 
@@ -24,7 +33,7 @@ func_t init_func(char *name) {
 }
 
 int func_swap_cb(mambo_context *ctx) {
-  fprintf(stderr, "Swapping (%s, 0x%lx) with (%s, 0x%lx)\n",
+  fprintf(stderr, "[MAMBO] Swapping (%s, 0x%lx) with (%s, 0x%lx)\n",
           global_vtable.original.name, global_vtable.original.loc,
           global_vtable.to_swap.name, global_vtable.to_swap.loc);
 
@@ -84,8 +93,6 @@ uintptr_t interval_map_search_by_name(interval_map *imap, const char *symbol_nam
       } // while elf_nextscn
     }   // if (elf != NULL)
   }     // for imap->entry_count
-  // That is way too many levels of nesting unfortunately I don't think much
-  // can be done about it
 
   if (pthread_mutex_unlock(&imap->mutex) != 0) {
     fprintf(stderr, "Failed to unlock interval map mutex.\n");
@@ -95,11 +102,11 @@ uintptr_t interval_map_search_by_name(interval_map *imap, const char *symbol_nam
   return (uintptr_t)NULL;
 }
 
-int pre_thread_handler(mambo_context *ctx) {
+int pre_thread_handler_swap(mambo_context *ctx) {
   (void)ctx;
 
-  func_t original = init_func("err");
-  func_t to_replace_with = init_func("launch_nukes");
+  func_t original = init_func("foo");
+  func_t to_replace_with = init_func("meow");
 
   global_vtable.original = original;
   global_vtable.to_swap = to_replace_with;
@@ -110,84 +117,25 @@ int pre_thread_handler(mambo_context *ctx) {
   return 0;
 }
 
-/*
-  Used to read in the 'secondary' and 'ternary' ELF files from which the
-  virtual functions will be build.
-*/
-int read_elf(const char *filepath, mambo_context *ctx) {
-  ELF_SHDR *shdr;
-  ELF_EHDR *ehdr;
-  Elf_Kind kind;
-  size_t shnum;
 
-  int fd = open(filepath, O_RDONLY);
-  if (fd < 0) {
-    printf("Couldn't open file %s\n", filepath);
-    exit(EXIT_FAILURE);
-  }
+int pre_thread_handler_elf_swap(mambo_context *ctx) {
+  Elf *elf;
+  struct elf_loader_auxv auxv;
+  uintptr_t entry_addr = 0;
+  fprintf(stderr, "[MAMBO] Loading alternative elf file!\n");
+  load_elf("/tmp/alt.out", &elf, &auxv, &entry_addr, false);
+  fprintf(stderr, "[MAMBO] At base: 0x%lx\n", auxv.at_base);
 
-  if (elf_version(EV_CURRENT) == EV_NONE) {
-    printf("Error setting ELF version\n");
-    exit(EXIT_FAILURE);
-  }
+  // int res = interval_map_search_by_name(&global_data.exec_allocs, "meow");
 
-  Elf *elf = elf_begin(fd, ELF_C_READ, NULL);
-  if (elf == NULL) {
-    printf("Error opening ELF file: %s: %s\n", filepath, elf_errmsg(-1));
-    exit(EXIT_FAILURE);
-  }
+  func_t original = init_func("foo");
+  func_t to_replace_with = init_func("meow");
 
-  kind = elf_kind(elf);
-  if (kind != ELF_K_ELF) {
-    printf("File %s isn't an ELF file\n", filepath);
-    exit(EXIT_FAILURE);
-  }
+  global_vtable.original = original;
+  global_vtable.to_swap = to_replace_with;
 
-  ehdr = ELF_GETEHDR(elf);
-  if (ehdr == NULL) {
-    printf("Error reading the ELF executable header: %s\n", elf_errmsg(-1));
-    exit(EXIT_FAILURE);
-  }
-
-  // XXX: 32-bit?
-  if (ehdr->e_ident[EI_CLASS] != ELF_CLASS) {
-    printf("Not a 32-bit ELF file\n");
-    exit(EXIT_FAILURE);
-  }
-
-  if (ehdr->e_machine != EM_MACHINE) {
-    printf("Not compiled for ARM\n");
-    exit(EXIT_FAILURE);
-  }
-
-  Elf_Scn *scn = NULL;
-  Elf_Data *symtab_data = NULL;
-  GElf_Sym sym;
-
-  elf_getshdrnum(elf, &shnum);
-  while ((scn = elf_nextscn(elf, scn)) != NULL) {
-    shdr = ELF_GETSHDR(scn);
-
-    if (shdr->sh_type == SHT_SYMTAB) {
-      symtab_data = elf_getdata(scn, NULL);
-      assert(symtab_data != NULL);
-
-      size_t sym_count = shdr->sh_size / shdr->sh_entsize;
-      for (int i = 0; i < sym_count;
-           i++) { // comparison of signed with unsigned
-        gelf_getsym(symtab_data, i, &sym);
-        // NOTE: look into why 'ELF_ST_TYPE' doesn't work
-        if (sym.st_name == 0 || ELF32_ST_TYPE(sym.st_info) != STT_FUNC)
-          continue;
-
-        char *fname = elf_strptr(elf, shdr->sh_link, sym.st_name);
-        assert(fname != NULL);
-        fprintf(stderr, "[MAMBO] Found function symbol: %s\n", fname);
-      } // for sym_count
-    }   // if sh_type == SHT_SYMTAB
-  }     // while nextscn
-  return 0;
-
+  add_function_callback(ctx, &global_data.watched_functions, original.name,
+                        (void *)original.loc);
 }
 
 // We are reading in the data after mambo has been initialised and before the
@@ -205,6 +153,7 @@ __attribute__((constructor)) void function_count_init_plugin() {
   mambo_context *ctx = mambo_register_plugin();
   assert(ctx != NULL);
 
-  mambo_register_pre_thread_cb(ctx, &pre_thread_handler);
+  // mambo_register_pre_thread_cb(ctx, &pre_thread_handler_swap);
+  mambo_register_pre_thread_cb(ctx, &pre_thread_handler_elf_swap);
   fprintf(stderr, "[MAMBO] Initialised Multi Function\n\n");
 }
