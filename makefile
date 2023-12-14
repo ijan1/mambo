@@ -28,7 +28,7 @@ VERSION?=$(shell git describe --abbrev=8 --dirty --always || echo '\<nogit\>')
 CFLAGS+=-D_GNU_SOURCE -g -std=gnu99 -O2 -Wunused-variable -DMJAO
 CFLAGS+=-DVERSION=\"$(VERSION)\"
 
-LDFLAGS+=-static -ldl
+LDFLAGS+=-ldl $(shell llvm-config-15 --ldflags --libs all)
 LIBS=-lelf -lpthread -lz
 HEADERS=*.h makefile
 INCLUDES=-I/usr/include/libelf -I.

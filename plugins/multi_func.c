@@ -1,12 +1,22 @@
 #include "multi_func.h"
-#include "../dbm.h"
+
+#include "dbm.h"
 #include "api/plugin_support.h"
+
+#include <llvm-c-15/llvm-c/TargetMachine.h>
+#include <llvm-c-15/llvm-c/Core.h>
+#include <llvm-c-15/llvm-c/Error.h>
+#include <llvm-c-15/llvm-c/ExecutionEngine.h>
+#include <llvm-c-15/llvm-c/Orc.h>
+#include <llvm-c-15/llvm-c/OrcEE.h>
+#include <llvm-c-15/llvm-c/Target.h>
+#include <llvm-c-15/llvm-c/Types.h>
+
+#include <assert.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-
-#include <assert.h>
 
 // TODO: make an err function taking in string and var args
 // and then just exiting since it seems to be a recurring theme
@@ -28,7 +38,7 @@ static func_vtable_t global_vtable;
 func_t init_func(char *name) {
   uintptr_t addr = interval_map_search_by_name(&global_data.exec_allocs, name);
 
-  func_t ret  = {.name = name, .loc = addr };
+  func_t ret = {.name = name, .loc = addr};
   return ret;
 }
 
@@ -48,7 +58,8 @@ void add_function_callback(mambo_context *ctx, watched_functions_t *self,
   function_watch_try_addp(self, name, addr);
 }
 
-uintptr_t interval_map_search_by_name(interval_map *imap, const char *symbol_name) {
+uintptr_t interval_map_search_by_name(interval_map *imap,
+                                      const char *symbol_name) {
   if (pthread_mutex_lock(&imap->mutex) != 0) {
     fprintf(stderr, "Failed to lock interval map mutex.\n");
     exit(EXIT_FAILURE);
@@ -76,14 +87,15 @@ uintptr_t interval_map_search_by_name(interval_map *imap, const char *symbol_nam
           Elf_Data *edata = elf_getdata(scn, NULL);
           assert(edata != NULL);
 
-          int sym_count = shdr.sh_size / shdr.sh_entsize; // narrowing conversion
+          int sym_count =
+              shdr.sh_size / shdr.sh_entsize; // narrowing conversion
           GElf_Sym sym;
 
           for (int i = 0; i < sym_count; i++) {
             gelf_getsym(edata, i, &sym);
             if (sym.st_value != 0 && ELF32_ST_TYPE(sym.st_info) == STT_FUNC) {
               const char *s_name = elf_strptr(elf, shdr.sh_link, sym.st_name);
-              if(strcmp(symbol_name, s_name) == 0) {
+              if (strcmp(symbol_name, s_name) == 0) {
                 pthread_mutex_unlock(&imap->mutex);
                 return fm->start + sym.st_value;
               }
@@ -117,7 +129,6 @@ int pre_thread_handler_swap(mambo_context *ctx) {
   return 0;
 }
 
-
 int pre_thread_handler_elf_swap(mambo_context *ctx) {
   Elf *elf;
   struct elf_loader_auxv auxv;
@@ -129,13 +140,31 @@ int pre_thread_handler_elf_swap(mambo_context *ctx) {
   // int res = interval_map_search_by_name(&global_data.exec_allocs, "meow");
 
   func_t original = init_func("foo");
-  func_t to_replace_with = init_func("meow");
+  func_t to_replace_with = init_func("mjao");
 
   global_vtable.original = original;
   global_vtable.to_swap = to_replace_with;
 
   add_function_callback(ctx, &global_data.watched_functions, original.name,
                         (void *)original.loc);
+}
+
+void initialise_llvm() {
+  LLVMInitializeAArch64Target();
+  LLVMInitializeAArch64AsmParser();
+  LLVMInitializeAArch64AsmPrinter();
+
+  char *def_triple = LLVMGetDefaultTargetTriple();
+  char *error = NULL;
+  LLVMTargetRef target_ref = NULL;
+
+  if (LLVMGetTargetFromTriple(def_triple, &target_ref, &error)) {
+    fprintf(stderr, "[ERROR] Failed to get triple.\n [ERROR] %s\n", error);
+  }
+
+  if(!LLVMTargetHasJIT(target_ref)) {
+    fprintf(stderr, "[ERROR] JIT is not supported on this platform.\n");
+  }
 }
 
 // We are reading in the data after mambo has been initialised and before the
@@ -156,4 +185,6 @@ __attribute__((constructor)) void function_count_init_plugin() {
   // mambo_register_pre_thread_cb(ctx, &pre_thread_handler_swap);
   mambo_register_pre_thread_cb(ctx, &pre_thread_handler_elf_swap);
   fprintf(stderr, "[MAMBO] Initialised Multi Function\n\n");
+
+  initialise_llvm();
 }
