@@ -6,6 +6,9 @@
 #include <fcntl.h>
 #include <gelf.h>
 #include <llvm-c-14/llvm-c/Target.h>
+#include <llvm-c-14/llvm-c/TargetMachine.h>
+#include <llvm-c-15/llvm-c/Core.h>
+#include <llvm-c-15/llvm-c/ExecutionEngine.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -164,7 +167,45 @@ int initialise_llvm(mambo_context *ctx) {
     fprintf(stderr, "[ERROR] JIT is not supported on this platform.\n");
   }
 
+  LLVMTargetMachineRef tm_ref = LLVMCreateTargetMachine(
+      target_ref, def_triple, "", "", LLVMCodeModelDefault, LLVMRelocDefault,
+      LLVMCodeModelDefault);
+  assert(tm_ref);
+  LLVMDisposeMessage(def_triple);
 
+  LLVMContextRef context = LLVMContextCreate();
+  LLVMModuleRef module = LLVMModuleCreateWithName("my_module");
+  LLVMBuilderRef builder_ref = LLVMCreateBuilderInContext(context);
+
+  // Create the main function
+  LLVMTypeRef return_type = LLVMInt32TypeInContext(context);
+  LLVMTypeRef param_types[] = {};
+  LLVMTypeRef function_type = LLVMFunctionType(return_type, param_types, 0, 0);
+  LLVMValueRef main_function = LLVMAddFunction(module, "main", function_type);
+
+  // Create basic block
+  LLVMBasicBlockRef entry = LLVMAppendBasicBlock(main_function, "entry");
+  LLVMPositionBuilderAtEnd(builder_ref, entry);
+
+  LLVMBuildRet(builder_ref, LLVMGetUndef(return_type));
+
+  LLVMExecutionEngineRef EE_ref;
+  if (LLVMCreateExecutionEngineForModule(&EE_ref, module, &error)) {
+    fprintf(stderr, "[ERROR] Failed to create execution Engine.\n[ERROR] %s\n", error);
+    LLVMDisposeMessage(error);
+    return 1;
+  }
+
+  int (*main_func)() = (int (*)())LLVMGetFunctionAddress(EE_ref, "main");
+  int result = main_func();
+  printf("[LLVM] result: %d\n", result);
+
+  LLVMDisposeExecutionEngine(EE_ref);
+  LLVMContextDispose(context);
+  LLVMDisposeTargetMachine(tm_ref);
+  LLVMDisposeBuilder(builder_ref);
+
+  return 0;
 }
 
 // We are reading in the data after mambo has been initialised and before the
