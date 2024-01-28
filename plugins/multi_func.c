@@ -2,19 +2,29 @@
 
 #include "../elf/elf_loader.h"
 #include "../plugins.h"
-#include <libelf.h>
+#include <assert.h>
 #include <fcntl.h>
 #include <gelf.h>
-#include <llvm-c-14/llvm-c/Types.h>
-#include <llvm-c-15/llvm-c/Core.h>
-#include <llvm-c-15/llvm-c/IRReader.h>
+#include <libelf.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
 
-// TODO: make an err function taking in string and var args
-// and then just exiting since it seems to be a recurring theme
+#define MAMBO_LOG(format, ...)                                                 \
+  do {                                                                         \
+    fprintf(stderr, "[MAMBO] " format, ##__VA_ARGS__);                         \
+  } while (0)
+
+#define LLVM_ERR(format, ...)                                                  \
+  do {                                                                         \
+    printf("[MAMBO_LLVM] " format, ##__VA_ARGS__);                             \
+    LLVMDisposeMessage(error);                                                 \
+  } while (0)
+
+#define LLVM_LOG(format, ...)                                                  \
+  do {                                                                         \
+    fprintf(stderr, "[MAMBO_LLVM] " format, ##__VA_ARGS__);                    \
+  } while (0)
 
 extern void function_watch_try_addp(watched_functions_t *self, char *name,
                                     void *addr);
@@ -38,9 +48,9 @@ func_t init_func(char *name) {
 }
 
 int func_swap_cb(mambo_context *ctx) {
-  fprintf(stderr, "[MAMBO] Swapping (%s, 0x%lx) with (%s, 0x%lx)\n",
-          global_vtable.original.name, global_vtable.original.loc,
-          global_vtable.to_swap.name, global_vtable.to_swap.loc);
+  MAMBO_LOG("Swapping (%s, 0x%lx) with (%s, 0x%lx)\n",
+            global_vtable.original.name, global_vtable.original.loc,
+            global_vtable.to_swap.name, global_vtable.to_swap.loc);
 
   void *new_addr = (void *)global_vtable.to_swap.loc;
   mambo_set_source_addr(ctx, new_addr);
@@ -56,7 +66,7 @@ void add_function_callback(mambo_context *ctx, watched_functions_t *self,
 uintptr_t interval_map_search_by_name(interval_map *imap,
                                       const char *symbol_name) {
   if (pthread_mutex_lock(&imap->mutex) != 0) {
-    fprintf(stderr, "Failed to lock interval map mutex.\n");
+    MAMBO_LOG("Failed to lock interval map mutex.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -102,7 +112,7 @@ uintptr_t interval_map_search_by_name(interval_map *imap,
   }     // for imap->entry_count
 
   if (pthread_mutex_unlock(&imap->mutex) != 0) {
-    fprintf(stderr, "Failed to unlock interval map mutex.\n");
+    MAMBO_LOG("Failed to unlock interval map mutex.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -128,9 +138,10 @@ int pre_thread_handler_elf_swap(mambo_context *ctx) {
   Elf *elf;
   struct elf_loader_auxv auxv;
   uintptr_t entry_addr = 0;
-  fprintf(stderr, "[MAMBO] Loading alternative elf file!\n");
+  MAMBO_LOG("Loading alternative elf file!\n");
+
   load_elf("/tmp/alt.out", &elf, &auxv, &entry_addr, false);
-  fprintf(stderr, "[MAMBO] At base: 0x%lx\n", auxv.at_base);
+  MAMBO_LOG("At base: 0x%lx\n", auxv.at_base);
 
   // int res = interval_map_search_by_name(&global_data.exec_allocs, "meow");
 
@@ -159,48 +170,45 @@ int initialise_llvm(mambo_context *ctx) {
   LLVMTargetRef target_ref = NULL;
 
   if (LLVMGetTargetFromTriple(def_triple, &target_ref, &error)) {
-    fprintf(stderr, "[ERROR] Failed to get triple.\n[ERROR] %s\n", error);
+    LLVM_ERR("Failed to get Triple.\n[ERROR] %s\n", error);
   }
 
   if (!LLVMTargetHasJIT(target_ref)) {
-    fprintf(stderr, "[ERROR] JIT is not supported on this platform.\n");
+    LLVM_ERR("[JIT is not supported on this platform.\n");
   }
 
   LLVMTargetMachineRef tm_ref = LLVMCreateTargetMachine(
-      target_ref, def_triple, "", "", LLVMCodeModelDefault, LLVMRelocDefault,
+      target_ref, def_triple, "", "", LLVMCodeGenLevelDefault, LLVMRelocDefault,
       LLVMCodeModelDefault);
   assert(tm_ref);
   LLVMDisposeMessage(def_triple);
 
   LLVMContextRef context = LLVMContextCreate();
-  // LLVMModuleRef module = LLVMModuleCreateWithName("my_module");
   LLVMBuilderRef builder_ref = LLVMCreateBuilderInContext(context);
 
   const char *file_path = "/tmp/main.ll";
   LLVMMemoryBufferRef mem_buf;
-  if(LLVMCreateMemoryBufferWithContentsOfFile(file_path, &mem_buf, &error)) {
-    fprintf(stderr, "[ERROR] Failed to read file '%s'.\n[ERROR] %s\n", file_path, error);
-    LLVMDisposeMessage(error);
+  if (LLVMCreateMemoryBufferWithContentsOfFile(file_path, &mem_buf, &error)) {
+    LLVM_ERR("Failed to read file '%s'.\n[ERROR] %s\n", file_path, error);
     return 1;
   }
 
   LLVMModuleRef module;
   if (LLVMParseIRInContext(context, mem_buf, &module, &error)) {
-    fprintf(stderr, "[ERROR] Failed to parse IR from file '%s'.\n[ERROR] %s\n", file_path, error);
-    LLVMDisposeMessage(error);
+    LLVM_ERR("Failed to parse IR from file '%s'.\n[ERROR] %s\n", file_path,
+             error);
     return 1;
   }
 
   LLVMExecutionEngineRef EE_ref;
   if (LLVMCreateExecutionEngineForModule(&EE_ref, module, &error)) {
-    fprintf(stderr, "[ERROR] Failed to create execution Engine.\n[ERROR] %s\n", error);
-    LLVMDisposeMessage(error);
+    LLVM_ERR("Failed to create execution Engine.\n[ERROR] %s\n", error);
     return 1;
   }
 
   int (*main_func)() = (int (*)())LLVMGetFunctionAddress(EE_ref, "main");
   int result = main_func();
-  printf("[LLVM] result: %d\n", result);
+  LLVM_LOG("result: %d\n", result);
 
   LLVMDisposeExecutionEngine(EE_ref);
   // LLVMDisposeModule(module); // Causes a segfault?
