@@ -27,6 +27,7 @@
 #include <llvm-c-15/llvm-c/Target.h>
 #include <llvm-c-15/llvm-c/TargetMachine.h>
 #include <llvm-c-15/llvm-c/Types.h>
+#include <llvm-c-15/llvm-c/IRReader.h>
 
 #include "dbm.h"
 

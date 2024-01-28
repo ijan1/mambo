@@ -5,10 +5,9 @@
 #include <libelf.h>
 #include <fcntl.h>
 #include <gelf.h>
-#include <llvm-c-14/llvm-c/Target.h>
-#include <llvm-c-14/llvm-c/TargetMachine.h>
+#include <llvm-c-14/llvm-c/Types.h>
 #include <llvm-c-15/llvm-c/Core.h>
-#include <llvm-c-15/llvm-c/ExecutionEngine.h>
+#include <llvm-c-15/llvm-c/IRReader.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -174,20 +173,23 @@ int initialise_llvm(mambo_context *ctx) {
   LLVMDisposeMessage(def_triple);
 
   LLVMContextRef context = LLVMContextCreate();
-  LLVMModuleRef module = LLVMModuleCreateWithName("my_module");
+  // LLVMModuleRef module = LLVMModuleCreateWithName("my_module");
   LLVMBuilderRef builder_ref = LLVMCreateBuilderInContext(context);
 
-  // Create the main function
-  LLVMTypeRef return_type = LLVMInt32TypeInContext(context);
-  LLVMTypeRef param_types[] = {};
-  LLVMTypeRef function_type = LLVMFunctionType(return_type, param_types, 0, 0);
-  LLVMValueRef main_function = LLVMAddFunction(module, "main", function_type);
+  const char *file_path = "/tmp/main.ll";
+  LLVMMemoryBufferRef mem_buf;
+  if(LLVMCreateMemoryBufferWithContentsOfFile(file_path, &mem_buf, &error)) {
+    fprintf(stderr, "[ERROR] Failed to read file '%s'.\n[ERROR] %s\n", file_path, error);
+    LLVMDisposeMessage(error);
+    return 1;
+  }
 
-  // Create basic block
-  LLVMBasicBlockRef entry = LLVMAppendBasicBlock(main_function, "entry");
-  LLVMPositionBuilderAtEnd(builder_ref, entry);
-
-  LLVMBuildRet(builder_ref, LLVMGetUndef(return_type));
+  LLVMModuleRef module;
+  if (LLVMParseIRInContext(context, mem_buf, &module, &error)) {
+    fprintf(stderr, "[ERROR] Failed to parse IR from file '%s'.\n[ERROR] %s\n", file_path, error);
+    LLVMDisposeMessage(error);
+    return 1;
+  }
 
   LLVMExecutionEngineRef EE_ref;
   if (LLVMCreateExecutionEngineForModule(&EE_ref, module, &error)) {
@@ -201,6 +203,7 @@ int initialise_llvm(mambo_context *ctx) {
   printf("[LLVM] result: %d\n", result);
 
   LLVMDisposeExecutionEngine(EE_ref);
+  // LLVMDisposeModule(module); // Causes a segfault?
   LLVMContextDispose(context);
   LLVMDisposeTargetMachine(tm_ref);
   LLVMDisposeBuilder(builder_ref);
