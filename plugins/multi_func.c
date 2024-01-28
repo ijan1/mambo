@@ -1,21 +1,14 @@
 #include "multi_func.h"
 
-#include "dbm.h"
-#include "api/plugin_support.h"
-
-#include <llvm-c-15/llvm-c/TargetMachine.h>
-#include <llvm-c-15/llvm-c/Core.h>
-#include <llvm-c-15/llvm-c/Error.h>
-#include <llvm-c-15/llvm-c/ExecutionEngine.h>
-#include <llvm-c-15/llvm-c/Orc.h>
-#include <llvm-c-15/llvm-c/OrcEE.h>
-#include <llvm-c-15/llvm-c/Target.h>
-#include <llvm-c-15/llvm-c/Types.h>
-
-#include <assert.h>
-#include <pthread.h>
-#include <stddef.h>
+#include "../elf/elf_loader.h"
+#include "../plugins.h"
+#include <libelf.h>
+#include <fcntl.h>
+#include <gelf.h>
+#include <llvm-c-14/llvm-c/Target.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <assert.h>
 #include <string.h>
 
 // TODO: make an err function taking in string and var args
@@ -149,22 +142,29 @@ int pre_thread_handler_elf_swap(mambo_context *ctx) {
                         (void *)original.loc);
 }
 
-void initialise_llvm() {
-  LLVMInitializeAArch64Target();
-  LLVMInitializeAArch64AsmParser();
-  LLVMInitializeAArch64AsmPrinter();
+int initialise_llvm(mambo_context *ctx) {
+  LLVMInitializeNativeTarget();
+  LLVMInitializeNativeAsmParser();
+  LLVMInitializeNativeAsmPrinter();
+
+  // LLVMInitializeAArch64Target();
+  // LLVMInitializeAArch64TargetInfo();
+  // LLVMInitializeAArch64AsmParser();
+  // LLVMInitializeAArch64AsmPrinter();
 
   char *def_triple = LLVMGetDefaultTargetTriple();
   char *error = NULL;
   LLVMTargetRef target_ref = NULL;
 
   if (LLVMGetTargetFromTriple(def_triple, &target_ref, &error)) {
-    fprintf(stderr, "[ERROR] Failed to get triple.\n [ERROR] %s\n", error);
+    fprintf(stderr, "[ERROR] Failed to get triple.\n[ERROR] %s\n", error);
   }
 
-  if(!LLVMTargetHasJIT(target_ref)) {
+  if (!LLVMTargetHasJIT(target_ref)) {
     fprintf(stderr, "[ERROR] JIT is not supported on this platform.\n");
   }
+
+
 }
 
 // We are reading in the data after mambo has been initialised and before the
@@ -183,8 +183,6 @@ __attribute__((constructor)) void function_count_init_plugin() {
   assert(ctx != NULL);
 
   // mambo_register_pre_thread_cb(ctx, &pre_thread_handler_swap);
-  mambo_register_pre_thread_cb(ctx, &pre_thread_handler_elf_swap);
+  mambo_register_pre_thread_cb(ctx, &initialise_llvm);
   fprintf(stderr, "[MAMBO] Initialised Multi Function\n\n");
-
-  initialise_llvm();
 }

@@ -28,8 +28,8 @@ VERSION?=$(shell git describe --abbrev=8 --dirty --always || echo '\<nogit\>')
 CFLAGS+=-D_GNU_SOURCE -g -std=gnu99 -O2 -Wunused-variable -DMJAO
 CFLAGS+=-DVERSION=\"$(VERSION)\"
 
-LDFLAGS+=-ldl $(shell llvm-config-15 --ldflags --libs all)
-LIBS=-lelf -lpthread -lz
+LDFLAGS+=-ldl
+LIBS=-lelf -lpthread -lz -lLLVM-15
 HEADERS=*.h makefile
 INCLUDES=-I/usr/include/libelf -I.
 SOURCES= common.c dbm.c traces.c syscalls.c dispatcher.c signals.c util.S
