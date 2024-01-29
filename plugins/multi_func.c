@@ -84,6 +84,7 @@ int func_swap_cb(mambo_context *ctx) {
 
 void add_function_callback(mambo_context *ctx, watched_functions_t *self,
                            char *name, void *addr) {
+  MAMBO_LOG("Added callback for '%s'\n", name);
   mambo_register_function_cb(ctx, name, &func_swap_cb, NULL, 2);
   function_watch_try_addp(self, name, addr);
 }
@@ -229,8 +230,6 @@ void initialise_llvm() {
   // int result = main_func(0, NULL);
   // LLVM_LOG("result: %d\n", result);
 
-  // NOTE: The proper way to get function's return type in C
-  // NOTE: doesn't seem to work with structs?
   LLVMValueRef function = LLVMGetNamedFunction(module, "example");
   LLVMTypeRef func_return_type =
       LLVMGetReturnType(LLVMGetElementType(LLVMTypeOf(function)));
@@ -245,6 +244,22 @@ void initialise_llvm() {
     const char *name = LLVM_type_name[LLVMGetTypeKind(LLVMTypeOf(parameter))];
     MAMBO_LOG("Parameter %zu Type: %s\n", i, name);
   }
+}
+
+int pre_thread_llvm_swap(mambo_context *ctx) {
+  func_t original = init_func("original");
+  func_t replacement;
+
+  uintptr_t substitute = (uintptr_t)LLVMGetFunctionAddress(EE_ref, "replacement");
+
+  replacement.loc = substitute;
+  replacement.name = "replacement";
+
+  global_vtable.original = original;
+  global_vtable.to_swap = replacement;
+
+  add_function_callback(ctx, &global_data.watched_functions, original.name,
+                        (void *)original.loc);
 }
 
 // We are reading in the data after mambo has been initialised and before the
@@ -263,9 +278,9 @@ __attribute__((constructor)) void function_count_init_plugin() {
   assert(ctx != NULL);
 
   initialise_llvm();
-  // mambo_register_pre_thread_cb(ctx, &pre_thread_handler_swap);
+  mambo_register_pre_thread_cb(ctx, &pre_thread_llvm_swap);
   // mambo_register_pre_thread_cb(ctx, &initialise_llvm);
-  fprintf(stderr, "[MAMBO] Initialised Multi Function\n\n");
+  MAMBO_LOG("Initialised Multi Function\n\n");
 }
 
 __attribute__((destructor)) void cleanup() {
