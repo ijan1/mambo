@@ -19,15 +19,6 @@
 
 #ifdef PLUGINS_NEW
 
-#include <llvm-c-15/llvm-c/Core.h>
-#include <llvm-c-15/llvm-c/Error.h>
-#include <llvm-c-15/llvm-c/ExecutionEngine.h>
-#include <llvm-c-15/llvm-c/Orc.h>
-#include <llvm-c-15/llvm-c/OrcEE.h>
-#include <llvm-c-15/llvm-c/Target.h>
-#include <llvm-c-15/llvm-c/TargetMachine.h>
-#include <llvm-c-15/llvm-c/Types.h>
-#include <llvm-c-15/llvm-c/IRReader.h>
 
 #include "dbm.h"
 

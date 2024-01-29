@@ -1,7 +1,8 @@
 #include "multi_func.h"
 
-#include "../elf/elf_loader.h"
-#include "../plugins.h"
+#include "elf/elf_loader.h"
+#include "plugins.h"
+
 #include <assert.h>
 #include <fcntl.h>
 #include <gelf.h>
@@ -9,6 +10,16 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <llvm-c-15/llvm-c/Core.h>
+#include <llvm-c-15/llvm-c/Error.h>
+#include <llvm-c-15/llvm-c/ExecutionEngine.h>
+#include <llvm-c-15/llvm-c/IRReader.h>
+#include <llvm-c-15/llvm-c/Orc.h>
+#include <llvm-c-15/llvm-c/OrcEE.h>
+#include <llvm-c-15/llvm-c/Target.h>
+#include <llvm-c-15/llvm-c/TargetMachine.h>
+#include <llvm-c-15/llvm-c/Types.h>
 
 #define MAMBO_LOG(format, ...)                                                 \
   do {                                                                         \
@@ -234,12 +245,6 @@ void initialise_llvm() {
     const char *name = LLVM_type_name[LLVMGetTypeKind(LLVMTypeOf(parameter))];
     MAMBO_LOG("Parameter %zu Type: %s\n", i, name);
   }
-
-  // LLVMDisposeExecutionEngine(EE_ref);
-  // LLVMContextDispose(context);
-  // LLVMDisposeTargetMachine(tm_ref);
-  // LLVMDisposeBuilder(builder_ref);
-  // LLVMDisposeModule(module); // Causes a segfault?
 }
 
 // We are reading in the data after mambo has been initialised and before the
@@ -261,4 +266,14 @@ __attribute__((constructor)) void function_count_init_plugin() {
   // mambo_register_pre_thread_cb(ctx, &pre_thread_handler_swap);
   // mambo_register_pre_thread_cb(ctx, &initialise_llvm);
   fprintf(stderr, "[MAMBO] Initialised Multi Function\n\n");
+}
+
+__attribute__((destructor)) void cleanup() {
+  LLVMDisposeExecutionEngine(EE_ref); // The EE is in charge of disposing the module
+  // LLVMDisposeModule(module);
+  LLVMContextDispose(context);
+  LLVMDisposeTargetMachine(tm_ref);
+  LLVMDisposeBuilder(builder_ref);
+
+  LLVMShutdown();
 }
