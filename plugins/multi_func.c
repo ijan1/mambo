@@ -19,12 +19,26 @@
   do {                                                                         \
     printf("[MAMBO_LLVM] " format, ##__VA_ARGS__);                             \
     LLVMDisposeMessage(error);                                                 \
+    error = NULL;                                                              \
+    exit(EXIT_FAILURE);                                                        \
   } while (0)
 
 #define LLVM_LOG(format, ...)                                                  \
   do {                                                                         \
     fprintf(stderr, "[MAMBO_LLVM] " format, ##__VA_ARGS__);                    \
   } while (0)
+
+static LLVMTargetMachineRef tm_ref;
+static LLVMContextRef context;
+static LLVMBuilderRef builder_ref;
+static LLVMModuleRef module;
+static LLVMExecutionEngineRef EE_ref;
+
+const char *const LLVM_type_name[20] = {
+    "void",    "fp16",   "fp32",          "fp64", "fp80",
+    "fp128",   "fp64_2", "label",         "int",  "func",
+    "struct",  "array",  "ptr",           "simd", "metadata",
+    "x86_mmx", "token",  "simd_scalable", "bf16", "x86_mmx"};
 
 extern void function_watch_try_addp(watched_functions_t *self, char *name,
                                     void *addr);
@@ -143,8 +157,6 @@ int pre_thread_handler_elf_swap(mambo_context *ctx) {
   load_elf("/tmp/alt.out", &elf, &auxv, &entry_addr, false);
   MAMBO_LOG("At base: 0x%lx\n", auxv.at_base);
 
-  // int res = interval_map_search_by_name(&global_data.exec_allocs, "meow");
-
   func_t original = init_func("foo");
   func_t to_replace_with = init_func("mjao");
 
@@ -155,7 +167,10 @@ int pre_thread_handler_elf_swap(mambo_context *ctx) {
                         (void *)original.loc);
 }
 
-int initialise_llvm(mambo_context *ctx) {
+void initialise_llvm() {
+  char *error = NULL;
+  const char *file_path = "/tmp/main.ll";
+
   LLVMInitializeNativeTarget();
   LLVMInitializeNativeAsmParser();
   LLVMInitializeNativeAsmPrinter();
@@ -166,7 +181,6 @@ int initialise_llvm(mambo_context *ctx) {
   // LLVMInitializeAArch64AsmPrinter();
 
   char *def_triple = LLVMGetDefaultTargetTriple();
-  char *error = NULL;
   LLVMTargetRef target_ref = NULL;
 
   if (LLVMGetTargetFromTriple(def_triple, &target_ref, &error)) {
@@ -174,49 +188,58 @@ int initialise_llvm(mambo_context *ctx) {
   }
 
   if (!LLVMTargetHasJIT(target_ref)) {
-    LLVM_ERR("[JIT is not supported on this platform.\n");
+    LLVM_ERR("JIT is not supported on this platform.\n");
   }
 
-  LLVMTargetMachineRef tm_ref = LLVMCreateTargetMachine(
+  tm_ref = LLVMCreateTargetMachine(
       target_ref, def_triple, "", "", LLVMCodeGenLevelDefault, LLVMRelocDefault,
       LLVMCodeModelDefault);
   assert(tm_ref);
   LLVMDisposeMessage(def_triple);
 
-  LLVMContextRef context = LLVMContextCreate();
-  LLVMBuilderRef builder_ref = LLVMCreateBuilderInContext(context);
+  context = LLVMContextCreate();
+  builder_ref = LLVMCreateBuilderInContext(context);
 
-  const char *file_path = "/tmp/main.ll";
   LLVMMemoryBufferRef mem_buf;
   if (LLVMCreateMemoryBufferWithContentsOfFile(file_path, &mem_buf, &error)) {
     LLVM_ERR("Failed to read file '%s'.\n[ERROR] %s\n", file_path, error);
-    return 1;
   }
 
-  LLVMModuleRef module;
   if (LLVMParseIRInContext(context, mem_buf, &module, &error)) {
     LLVM_ERR("Failed to parse IR from file '%s'.\n[ERROR] %s\n", file_path,
              error);
-    return 1;
   }
 
-  LLVMExecutionEngineRef EE_ref;
   if (LLVMCreateExecutionEngineForModule(&EE_ref, module, &error)) {
     LLVM_ERR("Failed to create execution Engine.\n[ERROR] %s\n", error);
-    return 1;
   }
 
-  int (*main_func)() = (int (*)())LLVMGetFunctionAddress(EE_ref, "main");
-  int result = main_func();
-  LLVM_LOG("result: %d\n", result);
+  // int (*main_func)(int, char**) = (int (*)(int, char**))LLVMGetFunctionAddress(EE_ref, "main");
+  // int result = main_func(0, NULL);
+  // LLVM_LOG("result: %d\n", result);
 
-  LLVMDisposeExecutionEngine(EE_ref);
+  // NOTE: The proper way to get function's return type in C
+  // NOTE: doesn't seem to work with structs?
+  LLVMValueRef function = LLVMGetNamedFunction(module, "example");
+  LLVMTypeRef func_return_type =
+      LLVMGetReturnType(LLVMGetElementType(LLVMTypeOf(function)));
+  MAMBO_LOG("Return Parameter Type: %s\n",
+            LLVM_type_name[LLVMGetTypeKind(func_return_type)]);
+
+  unsigned int param_count = LLVMCountParams(function);
+  MAMBO_LOG("Number of function parameters: %u\n", param_count);
+
+  for(size_t i = 0; i< param_count; i++) {
+    LLVMValueRef parameter = LLVMGetParam(function, i);
+    const char *name = LLVM_type_name[LLVMGetTypeKind(LLVMTypeOf(parameter))];
+    MAMBO_LOG("Parameter %zu Type: %s\n", i, name);
+  }
+
+  // LLVMDisposeExecutionEngine(EE_ref);
+  // LLVMContextDispose(context);
+  // LLVMDisposeTargetMachine(tm_ref);
+  // LLVMDisposeBuilder(builder_ref);
   // LLVMDisposeModule(module); // Causes a segfault?
-  LLVMContextDispose(context);
-  LLVMDisposeTargetMachine(tm_ref);
-  LLVMDisposeBuilder(builder_ref);
-
-  return 0;
 }
 
 // We are reading in the data after mambo has been initialised and before the
@@ -234,7 +257,8 @@ __attribute__((constructor)) void function_count_init_plugin() {
   mambo_context *ctx = mambo_register_plugin();
   assert(ctx != NULL);
 
+  initialise_llvm();
   // mambo_register_pre_thread_cb(ctx, &pre_thread_handler_swap);
-  mambo_register_pre_thread_cb(ctx, &initialise_llvm);
+  // mambo_register_pre_thread_cb(ctx, &initialise_llvm);
   fprintf(stderr, "[MAMBO] Initialised Multi Function\n\n");
 }
