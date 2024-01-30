@@ -18,8 +18,8 @@
 #include <llvm-c-15/llvm-c/TargetMachine.h>
 #include <llvm-c-15/llvm-c/Types.h>
 
-// TODO: exploit the already stored function names
-// if (function_watch_search(self, name) > 0)
+#define COUNT_OF(x)                                                            \
+  ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
 
 // LLVM specific variables
 static LLVMModuleRef module;
@@ -83,29 +83,7 @@ int initialise_llvm() {
     LLVM_ERR("Failed to create execution Engine.\n[ERROR] %s\n", error);
   }
 
-  // int (*main_func)(int, char **) =
-  //     (int (*)(int, char **))LLVMGetNamedFunction(module, function_name);
-  // int result = main_func(1, NULL);
-  // LLVM_LOG("result: %d\n", result);
-
-  // const char *function_name = "original";
-  // LLVM_LOG("Function name: %s\n", function_name);
-  // LLVMValueRef function = LLVMGetNamedFunction(module, function_name);
-  // LLVMTypeRef func_return_type =
-  //     LLVMGetReturnType(LLVMGetElementType(LLVMTypeOf(function)));
-  // LLVM_LOG("Return Parameter Type: %s\n",
-  //          LLVM_type_name[LLVMGetTypeKind(func_return_type)]);
-
-  // size_t param_count = LLVMCountParams(function);
-  // LLVM_LOG("Number of function parameters: %lu\n", param_count);
-
-  // for (size_t i = 0; i < param_count; i++) {
-  //   LLVMValueRef parameter = LLVMGetParam(function, i);
-  //   const char *name = LLVM_type_name[LLVMGetTypeKind(LLVMTypeOf(parameter))];
-  //   LLVM_LOG("Parameter %zu Type: %s\n", i, name);
-  // }
-
-  return 0;
+  return MAMBO_SUCCESS;
 }
 
 int func_pre_callback(mambo_context *ctx) {
@@ -116,8 +94,14 @@ int func_pre_callback(mambo_context *ctx) {
   MAMBO_LOG("Function address: %p\n", mambo_func_addr);
 
   void *llvm_func = (void *)LLVMGetFunctionAddress(EE_ref, mambo_func_name);
-  if(rand() % 2) {
+  if(llvm_func == NULL) {
+    MAMBO_LOG("LLVM address is null. Skipping substitution.\n");
+    return 1;
+  }
+
+  if (rand() % 2) {
     MAMBO_LOG("Coinflip successful. Substituting with LLVM function.\n");
+    MAMBO_LOG("New address: %p\n", llvm_func);
     assert(mambo_set_source_addr(ctx, llvm_func) == 0);
   }
 
@@ -125,7 +109,11 @@ int func_pre_callback(mambo_context *ctx) {
 }
 
 int func_post_callback(mambo_context *ctx) {
-  MAMBO_LOG("Post-callback.\n");
+  char *mambo_func_name = mambo_get_cb_function_name(ctx);
+  void *mambo_func_addr = mambo_get_source_addr(ctx);
+
+  MAMBO_LOG("Post-callback for: %s\n", mambo_func_name);
+  MAMBO_LOG("Function address: %p\n", mambo_func_addr);
   return 0;
 }
 
@@ -140,22 +128,11 @@ __attribute__((constructor)) void function_count_init_plugin() {
   while (current_func != NULL) {
     const char *func_name = LLVMGetValueName(current_func);
 
-    // Skip adding printf to the callback list
-    if (strcmp(func_name, "printf") == 0) {
-      current_func = LLVMGetNextFunction(current_func);
-      continue;
-    }
-
-    if (strcmp(func_name, "__isoc99_scanf") == 0) {
-      current_func = LLVMGetNextFunction(current_func);
-      continue;
-    }
-
     // Create hooks for the function
     int result = mambo_register_function_cb(ctx, func_name, func_pre_callback,
                                             func_post_callback, 1);
     assert(result == MAMBO_SUCCESS);
-    LLVM_LOG("Added hook for: %s\n", func_name);
+    MAMBO_LOG("Added hook for: %s\n", func_name);
 
     // Move to the next function
     current_func = LLVMGetNextFunction(current_func);

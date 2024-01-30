@@ -44,16 +44,8 @@
   do {                                                                         \
     fprintf(stdout, BLUE_FG "[MAMBO] " CLEAR format, ##__VA_ARGS__);           \
   } while (0)
-
-#define LLVM_LOG(format, ...)                                                  \
-  do {                                                                         \
-    fprintf(stdout, BLUE_FG "[MAMBO_LLVM] " CLEAR format, ##__VA_ARGS__);      \
-  } while (0)
 #else
 #define MAMBO_LOG(format, ...)                                                 \
-  do {                                                                         \
-  } while (0)
-#define LLVM_LOG(format, ...)                                                  \
   do {                                                                         \
   } while (0)
 #endif
