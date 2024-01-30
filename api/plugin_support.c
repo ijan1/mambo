@@ -274,7 +274,6 @@ int mambo_set_source_addr(mambo_context *ctx, void *source_addr) {
 #endif
 
   ctx->code.read_address = (void *)((uintptr_t)source_addr & ~1);
-  fprintf(stderr, "[MAMBO] read address: %p\n", ctx->code.read_address);
   ctx->code.replace = true;
 
   return 0;

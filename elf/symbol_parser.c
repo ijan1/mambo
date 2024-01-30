@@ -17,23 +17,75 @@
   limitations under the License.
 */
 
-#include <libelf.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <gelf.h>
 #include <assert.h>
-#include <stdbool.h>
-#include <string.h>
-#include <pthread.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <gelf.h>
+#include <libelf.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "../dbm.h"
 #include "elf_loader.h"
 
-int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, char **filename) {
+uintptr_t get_symbol_addr_by_name(const char *symbol_name) {
+  if (pthread_mutex_lock(&global_data.exec_allocs.mutex) != 0) {
+    fprintf(stderr, "Failed to lock interval map mutex.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // Unfortunately since we don't know where the symbol is located
+  // we have to traverse the entire executable
+  interval_map *imap = &global_data.exec_allocs;
+  for (ssize_t i = 0; i < imap->entry_count; i++) {
+    const interval_map_entry *fm = &imap->entries[i];
+
+    Elf *elf = elf_begin(fm->fd, ELF_C_READ, NULL);
+    ELF_EHDR *ehdr;
+    if (elf != NULL) {
+
+      GElf_Shdr shdr;
+      Elf_Scn *scn = NULL;
+      ehdr = ELF_GETEHDR(elf);
+      while ((scn = elf_nextscn(elf, scn)) != NULL) {
+        gelf_getshdr(scn, &shdr);
+        if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
+          Elf_Data *edata = elf_getdata(scn, NULL);
+          assert(edata != NULL);
+
+          int sym_count = shdr.sh_size / shdr.sh_entsize;
+          GElf_Sym sym;
+
+          for (int i = 0; i < sym_count; i++) {
+            gelf_getsym(edata, i, &sym);
+            if (sym.st_value != 0 && ELF32_ST_TYPE(sym.st_info) == STT_FUNC) {
+              const char *s_name = elf_strptr(elf, shdr.sh_link, sym.st_name);
+              if (strcmp(symbol_name, s_name) == 0) {
+                pthread_mutex_unlock(&imap->mutex);
+                return fm->start + sym.st_value;
+              }
+            }
+          }
+        }
+      } // while elf_nextscn
+    }   // if (elf != NULL)
+  }     // for imap->entry_count
+
+  if (pthread_mutex_unlock(&imap->mutex) != 0) {
+    fprintf(stderr, "Failed to unlock interval map mutex.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  return (uintptr_t)NULL;
+}
+
+int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr,
+                            char **filename) {
   interval_map_entry fm;
   int ret = interval_map_search_by_addr(&global_data.exec_allocs, addr, &fm);
   *sym_name = NULL;
@@ -43,7 +95,8 @@ int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, 
   if (filename) {
     *filename = NULL;
   }
-  if (ret != 1 || fm.fd < 0) return -1;
+  if (ret != 1 || fm.fd < 0)
+    return -1;
 
   uintptr_t sym_addr = 0;
 
@@ -58,9 +111,9 @@ int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, 
       addr -= fm.start;
     }
 
-    while((scn = elf_nextscn(elf, scn)) != NULL) {
+    while ((scn = elf_nextscn(elf, scn)) != NULL) {
       gelf_getshdr(scn, &shdr);
-      if(shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
+      if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
         Elf_Data *edata = elf_getdata(scn, NULL);
         assert(edata != NULL);
         int sym_count = shdr.sh_size / shdr.sh_entsize;
@@ -75,7 +128,7 @@ int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, 
           }
         }
       } // shdr.sh_type == SHT_SYMTAB
-    } // while scn iterator
+    }   // while scn iterator
 
     if (*sym_name != NULL) {
       *sym_name = strdup(*sym_name);
@@ -97,7 +150,7 @@ int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, 
     char buf_path[buf_path_size];
     ret = snprintf(buf_proc, buf_proc_size, "/proc/self/fd/%d", fm.fd);
     assert(ret > 0);
-    ret = readlink(buf_proc, buf_path, buf_path_size-1);
+    ret = readlink(buf_proc, buf_path, buf_path_size - 1);
     assert(ret > 0);
     buf_path[ret] = '\0';
     *filename = strdup(buf_path);
@@ -109,7 +162,6 @@ int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, 
 
   return 0;
 }
-
 
 stack_frame_t *get_frame(stack_frame_t *frame) {
   void *fp = frame;
@@ -131,15 +183,17 @@ int get_backtrace(stack_frame_t *fp, stack_frame_handler handler, void *data) {
       fp = get_frame(fp);
       frame_rerror = try_memcpy(&frame, fp, sizeof(frame));
       if (frame_rerror == 0) {
-        int ret = get_symbol_info_by_addr(frame.lr, &symbol, &symbol_base, &filename);
+        int ret =
+            get_symbol_info_by_addr(frame.lr, &symbol, &symbol_base, &filename);
         if (ret == 0) {
           ret = handler(data, (void *)fp->lr, symbol, symbol_base, filename);
           free(symbol);
           free(filename);
-          if (ret != 0) return ret;
+          if (ret != 0)
+            return ret;
         }
       }
-    } while(frame_rerror == 0 && (frame.prev > fp) && (fp = frame.prev));
+    } while (frame_rerror == 0 && (frame.prev > fp) && (fp = frame.prev));
 
     return 0;
   }
@@ -184,13 +238,16 @@ int function_watch_search(watched_functions_t *self, char *name) {
 }
 
 int function_watch_add(watched_functions_t *self, char *name, int plugin_id,
-                       mambo_callback pre_callback, mambo_callback post_callback) {
+                       mambo_callback pre_callback,
+                       mambo_callback post_callback) {
   function_watch_lock_funcs(self);
 
-  if (function_watch_search(self, name) > 0) return -101;
+  if (function_watch_search(self, name) > 0)
+    return -101;
 
   int idx = self->func_count++;
-  if (idx >= MAX_WATCHED_FUNCS) return -102;
+  if (idx >= MAX_WATCHED_FUNCS)
+    return -102;
 
   self->funcs[idx].name = name;
   self->funcs[idx].plugin_id = plugin_id;
@@ -204,7 +261,8 @@ int function_watch_add(watched_functions_t *self, char *name, int plugin_id,
 
 /* Memory barriers used in function modifying funcps because the
    mutex doesn't protect from reading */
-int function_watch_addp(watched_functions_t *self, watched_func_t *func, void *addr) {
+int function_watch_addp(watched_functions_t *self, watched_func_t *func,
+                        void *addr) {
   int err = 0;
 
   function_watch_lock_funcps(self);
@@ -232,7 +290,8 @@ ret:
   return err;
 }
 
-void function_watch_try_addp(watched_functions_t *self, char *name, void *addr) {
+void function_watch_try_addp(watched_functions_t *self, char *name,
+                             void *addr) {
   function_watch_lock_funcs(self);
 
   for (int i = 0; i < self->func_count; i++) {
@@ -246,7 +305,7 @@ void function_watch_try_addp(watched_functions_t *self, char *name, void *addr) 
 }
 
 int function_watch_delete_addp(watched_functions_t *self, int i) {
-  int last = self->funcp_count-1;
+  int last = self->funcp_count - 1;
   if (i > last) {
     return -1;
   }
@@ -268,7 +327,8 @@ int function_watch_delete_addp(watched_functions_t *self, int i) {
   return 0;
 }
 
-int function_watch_addp_invalidate(watched_functions_t *self, void *addr, size_t size) {
+int function_watch_addp_invalidate(watched_functions_t *self, void *addr,
+                                   size_t size) {
   int ret = -1;
 
   function_watch_lock_funcps(self);
@@ -285,7 +345,8 @@ int function_watch_addp_invalidate(watched_functions_t *self, void *addr, size_t
   return ret;
 }
 
-int function_watch_parse_elf(watched_functions_t *self, Elf *elf, void *base_addr) {
+int function_watch_parse_elf(watched_functions_t *self, Elf *elf,
+                             void *base_addr) {
   Elf_Scn *scn = NULL;
   GElf_Shdr shdr;
   GElf_Sym sym;
@@ -298,9 +359,9 @@ int function_watch_parse_elf(watched_functions_t *self, Elf *elf, void *base_add
     base_addr = NULL;
   }
 
-  while((scn = elf_nextscn(elf, scn)) != NULL) {
+  while ((scn = elf_nextscn(elf, scn)) != NULL) {
     gelf_getshdr(scn, &shdr);
-    if(shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
+    if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
       Elf_Data *edata = elf_getdata(scn, NULL);
       assert(edata != NULL);
       int sym_count = shdr.sh_size / shdr.sh_entsize;
@@ -314,6 +375,6 @@ int function_watch_parse_elf(watched_functions_t *self, Elf *elf, void *base_add
         }
       }
     } // shdr.sh_type == SHT_SYMTAB
-  } // while scn iterator
+  }   // while scn iterator
   return 0;
 }

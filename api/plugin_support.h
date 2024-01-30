@@ -207,6 +207,7 @@ int mambo_reserve_cc_space(mambo_context *ctx, size_t size);
 mambo_branch_type mambo_get_branch_type(mambo_context *ctx);
 
 /* Symbol-related functions */
+uintptr_t get_symbol_addr_by_name(const char *symbol_name);
 int get_symbol_info_by_addr(uintptr_t addr, char **sym_name, void **start_addr, char **filename);
 typedef int (*stack_frame_handler)(void *data, void *addr, char *sym_name, void *symbol_start_addr, char *filename);
 int get_backtrace(stack_frame_t *fp, stack_frame_handler handler, void *ptr);

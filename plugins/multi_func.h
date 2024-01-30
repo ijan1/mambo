@@ -19,33 +19,58 @@
 
 #ifdef PLUGINS_NEW
 
-
 #include "dbm.h"
 
+#include <fcntl.h>
+#include <gelf.h>
+#include <libelf.h>
 #include <pthread.h>
+#include <stdint.h>
+
+#define BLACK_FG "\x1b[30m"
+#define RED_FG "\x1b[31m"
+#define GREEN_FG "\x1b[32m"
+#define YELLOW_FG "\x1b[33m"
+#define BLUE_FG "\x1b[34m"
+#define PURPLE_FG "\x1b[35m"
+#define CYAN_FG "\x1b[36m"
+#define WHITE_FG "\x1b[37m"
+#define BOLD_FG "\x1b[1m"
+#define UNDERLINE_FG "\x1b[4m"
+#define CLEAR "\x1b[0m"
+
+#if defined(MJAO)
+#define MAMBO_LOG(format, ...)                                                 \
+  do {                                                                         \
+    fprintf(stdout, BLUE_FG "[MAMBO] " CLEAR format, ##__VA_ARGS__);           \
+  } while (0)
+
+#define LLVM_LOG(format, ...)                                                  \
+  do {                                                                         \
+    fprintf(stdout, BLUE_FG "[MAMBO_LLVM] " CLEAR format, ##__VA_ARGS__);      \
+  } while (0)
+#else
+#define MAMBO_LOG(format, ...)                                                 \
+  do {                                                                         \
+  } while (0)
+#define LLVM_LOG(format, ...)                                                  \
+  do {                                                                         \
+  } while (0)
+#endif
+
+#define LLVM_ERR(format, ...)                                                  \
+  do {                                                                         \
+    fprintf(stderr, RED_FG "[MAMBO_LLVM] " CLEAR format, ##__VA_ARGS__);       \
+    LLVMDisposeMessage(error);                                                 \
+    error = NULL;                                                              \
+    return 1;                                                                  \
+  } while (0)
 
 typedef struct {
-  char *name;
-  uintptr_t loc;
-} func_t;
+  uint64_t regs[32];
+  uint64_t pc;
 
-#define FUNC_NUM 3
-
-typedef struct {
-  func_t original;
-  func_t to_swap; // Idea have some sort of additional/alternative params to
-                  // pass in
-  func_t swap[FUNC_NUM];
-} func_vtable_t;
-
-func_t init_func(char *name);
-int func_swap_cb(mambo_context *ctx);
-int pre_thread_handler_swap(mambo_context *ctx);
-int pre_thread_handler_elf_swap(mambo_context *ctx);
-int read_elf(const char *filepath, mambo_context *ctx);
-void add_function_callback(mambo_context *ctx, watched_functions_t *self,
-                           char *name, void *addr);
-uintptr_t interval_map_search_by_name(interval_map *imap,
-                                      const char *symbol_name);
+  bool is_morello;
+} CPU_t;
 
 #endif /* PLUGINS_NEW */
