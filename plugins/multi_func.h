@@ -27,6 +27,8 @@
 #include <pthread.h>
 #include <stdint.h>
 
+#include <llvm-c-15/llvm-c/Core.h>
+
 #define BLACK_FG "\x1b[30m"
 #define RED_FG "\x1b[31m"
 #define GREEN_FG "\x1b[32m"
@@ -62,7 +64,21 @@ typedef struct {
   uint64_t regs[32];
   uint64_t pc;
 
+  bool should_swap;
   bool is_morello;
 } CPU_t;
+
+void initialise_cpu(CPU_t *this) {
+  for(int i = 0; i < 32; i++) {
+    this->regs[i] = 0xDEADBEEF;
+  }
+
+  this->pc = 0xDEADBEEF;
+
+  this->should_swap = false;
+  this->is_morello = false;
+}
+
+void handle_parameter(mambo_context *ctx, LLVMTypeKind param, size_t param_idx);
 
 #endif /* PLUGINS_NEW */
