@@ -79,6 +79,10 @@ void initialise_cpu(CPU_t *this) {
   this->is_morello = false;
 }
 
+// Returns whether a function calls itself
+bool is_recursive(LLVMValueRef func);
+
+//
 void handle_parameter(mambo_context *ctx, LLVMTypeKind param, size_t param_idx);
 
 #endif /* PLUGINS_NEW */

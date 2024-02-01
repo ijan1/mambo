@@ -33,7 +33,7 @@
 #include "../dbm.h"
 #include "elf_loader.h"
 
-uintptr_t get_symbol_addr_by_name(const char *symbol_name) {
+uintptr_t get_symbol_addr_by_name(const char *symbol_name, int symbol_type) {
   if (pthread_mutex_lock(&global_data.exec_allocs.mutex) != 0) {
     fprintf(stderr, "Failed to lock interval map mutex.\n");
     exit(EXIT_FAILURE);
@@ -63,7 +63,9 @@ uintptr_t get_symbol_addr_by_name(const char *symbol_name) {
 
           for (int i = 0; i < sym_count; i++) {
             gelf_getsym(edata, i, &sym);
-            if (sym.st_value != 0 && ELF32_ST_TYPE(sym.st_info) == STT_FUNC) {
+            // TODO: add in a parameter to specify the type
+            if (sym.st_value !=
+                0 && ELF_ST_TYPE(sym.st_info) == symbol_type) {
               const char *s_name = elf_strptr(elf, shdr.sh_link, sym.st_name);
               if (strcmp(symbol_name, s_name) == 0) {
                 pthread_mutex_unlock(&imap->mutex);

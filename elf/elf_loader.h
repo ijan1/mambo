@@ -44,14 +44,12 @@
   #define ELF_AUXV_T Elf64_auxv_t
 #endif
 
-/* Both Elf32_Sym and Elf64_Sym use the same one-byte st_info field, however we
-   do this because uhhhhhhhhhhhhhhhhhh */
 #ifndef ELF_ST_TYPE
   #ifdef __arm__
-    #define ELF_ST_TYPE(val) ELF_32_ST_TYPE(val)
+    #define ELF_ST_TYPE(val) ELF32_ST_TYPE(val)
   #endif
   #ifdef __aarch64__
-    #define ELF_ST_TYPE(val) ELF_64_ST_TYPE(val)
+    #define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
   #endif
 #endif
 
