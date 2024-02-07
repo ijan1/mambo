@@ -105,6 +105,10 @@ int mambo_register_post_thread_cb(mambo_context *ctx, mambo_callback cb) {
   return __mambo_register_cb(ctx, POST_THREAD_C, cb);
 }
 
+int mambo_register_entry_cb(mambo_context *ctx, mambo_callback cb) {
+  return __mambo_register_cb(ctx, ENTRY_C, cb);
+}
+
 int mambo_register_exit_cb(mambo_context *ctx, mambo_callback cb) {
   return __mambo_register_cb(ctx, EXIT_C, cb);
 }

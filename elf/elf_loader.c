@@ -317,7 +317,7 @@ char *copy_string_to_stack(char *string, char **stack_strings) {
 #define STACK_FLAGS (MAP_PRIVATE|MAP_ANONYMOUS|MAP_GROWSDOWN|MAP_STACK)
 #define stack_push(val) stack[stack_i++] = (val);
 
-void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, char **envp, struct elf_loader_auxv *auxv) {
+void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, char **envp, struct elf_loader_auxv *auxv, dbm_thread *thread_data) {
   // Allocate a new stack for the execution of the application
   void *stack_space = mmap(NULL, INITIAL_STACK_SIZE, STACK_PROT, STACK_FLAGS, -1, 0);
   assert(stack_space != MAP_FAILED);

@@ -383,6 +383,7 @@ void mambo_deliver_callbacks_code(unsigned cb_id, dbm_thread *thread_data, cc_ty
                                   void *read_address, void *write_p, void *data_p, bool *stop);
 void _function_callback_wrapper(mambo_context *ctx, watched_func_t *func);
 int function_watch_parse_elf(watched_functions_t *self, Elf *elf, void *base_addr);
+int function_watch_add_elf(watched_functions_t *self, interval_map *imap);
 int function_watch_add(watched_functions_t *self, char *name, int plugin_id,
                        mambo_callback pre_callback, mambo_callback post_callback);
 

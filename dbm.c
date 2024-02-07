@@ -155,12 +155,12 @@ uintptr_t stub_bb(dbm_thread *thread_data, uintptr_t target) {
   unsigned int basic_block;
   uintptr_t block_address;
   uintptr_t thumb = target & THUMB;
-  
+
   basic_block = allocate_bb(thread_data);
   block_address = (uintptr_t)&thread_data->code_cache->blocks[basic_block];
-  
+
   debug("Stub BB: 0x%" PRIxPTR "\n", block_address + thumb);
-  
+
   thread_data->code_cache_meta[basic_block].exit_branch_type = stub;
   if (!hash_add(&thread_data->entry_address, target, block_address + thumb)) {
     fprintf(stderr, "Failed to add hash table entry for newly created stub basic block\n");
@@ -177,16 +177,16 @@ uintptr_t stub_bb(dbm_thread *thread_data, uintptr_t target) {
 #ifdef __aarch64__
   assert(0); // TODO
 #endif
-  
+
   return adjust_cc_entry(block_address + thumb);
 }
 
 uintptr_t lookup_or_stub(dbm_thread *thread_data, uintptr_t target) {
   uintptr_t block_address;
-  
+
   debug("Stub (0x%" PRIxPTR ")\n", target);
   debug("Thread_data: %p\n", thread_data);
-  
+
   block_address = cc_lookup(thread_data, target);
   if (block_address == UINT_MAX) {
     block_address = stub_bb(thread_data, target);
@@ -431,12 +431,12 @@ void init_thread(dbm_thread *thread_data) {
 #endif // DBM_TRACES
 
   __clear_cache((char *)&thread_data->code_cache->blocks[0], (char *)&thread_data->code_cache->blocks[thread_data->free_block]);
- 
+
   thread_data->dispatcher_addr = (uintptr_t)&thread_data->code_cache[0] + dispatcher_wrapper_offset;
   thread_data->syscall_wrapper_addr = (uintptr_t)&thread_data->code_cache[0] + syscall_wrapper_offset;
 
   thread_data->status = THREAD_RUNNING;
-                        
+
   debug("Syscall wrapper addr: 0x%" PRIxPTR "\n", thread_data->syscall_wrapper_addr);
 }
 
@@ -611,7 +611,7 @@ void notify_vm_op(vm_op_t op, uintptr_t addr, size_t size, int prot, int flags, 
 
 void main(int argc, char **argv, char **envp) {
   Elf *elf = NULL;
-  
+
   if (argc < 2) {
     printf("Syntax: dbm elf_file arguments\n");
     exit(EXIT_FAILURE);
@@ -649,7 +649,7 @@ void main(int argc, char **argv, char **envp) {
   assert(map != MAP_FAILED);
   global_data.initial_brk = global_data.brk = (uintptr_t)map;
   global_data.brk += PAGE_SIZE;
-  
+
   dbm_thread *thread_data;
   if (!allocate_thread_data(&thread_data)) {
     fprintf(stderr, "Failed to allocate initial thread data\n");
@@ -664,6 +664,9 @@ void main(int argc, char **argv, char **envp) {
   debug("Address of first basic block is: 0x%" PRIxPTR "\n", block_address);
 
   #define ARGDIFF 2
-  elf_run(block_address, argv[1], argc-ARGDIFF, &argv[ARGDIFF], envp, &auxv);
+
+  mambo_deliver_callbacks(ENTRY_C, thread_data);
+  function_watch_add_elf(&global_data.watched_functions, &global_data.exec_allocs);
+  elf_run(block_address, argv[1], argc-ARGDIFF, &argv[ARGDIFF], envp, &auxv, thread_data);
 }
 

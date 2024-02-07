@@ -77,6 +77,7 @@ typedef enum {
   POST_THREAD_C,
   PRE_FN_C,
   POST_FN_C,
+  ENTRY_C,
   EXIT_C,
   VM_OP_C,
   CALLBACK_MAX_IDX,
@@ -143,6 +144,7 @@ int mambo_register_pre_syscall_cb(mambo_context *ctx, mambo_callback cb);
 int mambo_register_post_syscall_cb(mambo_context *ctx, mambo_callback cb);
 int mambo_register_pre_thread_cb(mambo_context *ctx, mambo_callback cb);
 int mambo_register_post_thread_cb(mambo_context *ctx, mambo_callback cb);
+int mambo_register_entry_cb(mambo_context *ctx, mambo_callback cb);
 int mambo_register_exit_cb(mambo_context *ctx, mambo_callback cb);
 int mambo_register_vm_op_cb(mambo_context *ctx, mambo_callback cb);
 int mambo_register_function_cb(mambo_context *ctx, char *fn_name,

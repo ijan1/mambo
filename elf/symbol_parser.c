@@ -52,6 +52,10 @@ uintptr_t get_symbol_addr_by_name(const char *symbol_name, int symbol_type) {
       GElf_Shdr shdr;
       Elf_Scn *scn = NULL;
       ehdr = ELF_GETEHDR(elf);
+      uintptr_t base_addr = fm->start;
+      if (ehdr->e_type == ET_EXEC) {
+        base_addr = 0;
+      }
       while ((scn = elf_nextscn(elf, scn)) != NULL) {
         gelf_getshdr(scn, &shdr);
         if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
@@ -63,13 +67,12 @@ uintptr_t get_symbol_addr_by_name(const char *symbol_name, int symbol_type) {
 
           for (int i = 0; i < sym_count; i++) {
             gelf_getsym(edata, i, &sym);
-            // TODO: add in a parameter to specify the type
             if (sym.st_value !=
                 0 && ELF_ST_TYPE(sym.st_info) == symbol_type) {
               const char *s_name = elf_strptr(elf, shdr.sh_link, sym.st_name);
               if (strcmp(symbol_name, s_name) == 0) {
                 pthread_mutex_unlock(&imap->mutex);
-                return fm->start + sym.st_value;
+                return base_addr + sym.st_value;
               }
             }
           }
@@ -380,3 +383,51 @@ int function_watch_parse_elf(watched_functions_t *self, Elf *elf,
   }   // while scn iterator
   return 0;
 }
+
+int function_watch_add_elf(watched_functions_t *self, interval_map *imap) {
+  if (pthread_mutex_lock(&global_data.exec_allocs.mutex) != 0) {
+    fprintf(stderr, "Failed to lock interval map mutex.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  for (ssize_t i = 0; i < imap->entry_count; i++) {
+    const interval_map_entry *fm = &imap->entries[i];
+
+    Elf *elf = elf_begin(fm->fd, ELF_C_READ, NULL);
+    ELF_EHDR *ehdr;
+    if (elf != NULL) {
+
+      GElf_Shdr shdr;
+      Elf_Scn *scn = NULL;
+      ehdr = ELF_GETEHDR(elf);
+      void *base_addr = (void *)fm->start;
+      if (ehdr->e_type == ET_EXEC) {
+        base_addr = NULL;
+      }
+      while ((scn = elf_nextscn(elf, scn)) != NULL) {
+        gelf_getshdr(scn, &shdr);
+        if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
+          Elf_Data *edata = elf_getdata(scn, NULL);
+          assert(edata != NULL);
+
+          int sym_count = shdr.sh_size / shdr.sh_entsize;
+          GElf_Sym sym;
+
+          for (int j = 0; j < sym_count; j++) {
+            gelf_getsym(edata, j, &sym);
+            if (sym.st_value != 0 && ELF_ST_TYPE(sym.st_info) == STT_FUNC) {
+              char *s_name = elf_strptr(elf, shdr.sh_link, sym.st_name);
+              function_watch_try_addp(self, s_name, base_addr + sym.st_value);
+            }
+          } // i < sym_count
+        }   // if (shdr.sh_type == SHT_SYMTAB || SHT_DYNSYM)
+      }     // while (scn != NULL)
+    }       // if (elf != NULL)
+  }         // i < imap->entry_count
+  if (pthread_mutex_unlock(&imap->mutex) != 0) {
+    fprintf(stderr, "Failed to unlock interval map mutex.\n");
+    exit(EXIT_FAILURE);
+  }
+  return 0;
+} // for imap->entry_count
+

@@ -21,6 +21,8 @@
 #include <libelf.h>
 #include <stdbool.h>
 
+typedef struct dbm_thread_s dbm_thread;
+
 #ifdef __arm__
   #define ELF_CLASS  ELFCLASS32
   #define EM_MACHINE EM_ARM
@@ -61,5 +63,5 @@ struct elf_loader_auxv {
 };
 
 void load_elf(char *filename, Elf **ret_elf, struct elf_loader_auxv *auxv, uintptr_t *entry_addr, bool is_interp);
-void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, char **envp, struct elf_loader_auxv *auxv);
+void elf_run(uintptr_t entry_address, char *filename, int argc, char **argv, char **envp, struct elf_loader_auxv *auxv, dbm_thread *thread_data);
 

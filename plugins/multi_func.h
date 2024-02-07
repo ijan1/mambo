@@ -19,15 +19,12 @@
 
 #ifdef PLUGINS_NEW
 
-#include "dbm.h"
-
+#include "plugins.h"
 #include <fcntl.h>
 #include <gelf.h>
 #include <libelf.h>
 #include <pthread.h>
 #include <stdint.h>
-
-#include <llvm-c-15/llvm-c/Core.h>
 
 #define BLACK_FG "\x1b[30m"
 #define RED_FG "\x1b[31m"
@@ -52,37 +49,11 @@
   } while (0)
 #endif
 
-#define LLVM_ERR(format, ...)                                                  \
+#define MAMBO_ERR(format, ...)                                                  \
   do {                                                                         \
-    fprintf(stderr, RED_FG "[MAMBO_LLVM] " CLEAR format, ##__VA_ARGS__);       \
+    fprintf(stderr, RED_FG "[MAMBO] " CLEAR format, ##__VA_ARGS__);       \
     LLVMDisposeMessage(error);                                                 \
     error = NULL;                                                              \
-    return 1;                                                                  \
   } while (0)
-
-typedef struct {
-  uint64_t regs[32];
-  uint64_t pc;
-
-  bool should_swap;
-  bool is_morello;
-} CPU_t;
-
-void initialise_cpu(CPU_t *this) {
-  for(int i = 0; i < 32; i++) {
-    this->regs[i] = 0xDEADBEEF;
-  }
-
-  this->pc = 0xDEADBEEF;
-
-  this->should_swap = false;
-  this->is_morello = false;
-}
-
-// Returns whether a function calls itself
-bool is_recursive(LLVMValueRef func);
-
-//
-void handle_parameter(mambo_context *ctx, LLVMTypeKind param, size_t param_idx);
 
 #endif /* PLUGINS_NEW */
