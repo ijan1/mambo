@@ -9,7 +9,7 @@
 #PLUGINS+=plugins/symbol_example.c
 #PLUGINS+=plugins/memcheck/memcheck.S plugins/memcheck/memcheck.c plugins/memcheck/naive_stdlib.c
 #PLUGINS+=plugins/follow_exec.c
-PLUGINS+=plugins/multi_func.c
+#PLUGINS+=plugins/multi_func.c
 #PLUGINS+=plugins/function_count.c
 #PLUGINS+=plugins/hotspot.c
 

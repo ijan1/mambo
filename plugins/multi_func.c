@@ -16,6 +16,8 @@
 #include <llvm-c-15/llvm-c/TargetMachine.h>
 #include <llvm-c-15/llvm-c/Types.h>
 #include <llvm-c-15/llvm-c/Support.h>
+#include <llvm-c-15/llvm-c/Transforms/PassBuilder.h>
+#include <llvm-c-15/llvm-c/Transforms/PassManagerBuilder.h>
 
 #define COUNT_OF(x)                                                            \
   ((sizeof(x) / sizeof(0 [x])) / ((size_t)(!(sizeof(x) % sizeof(0 [x])))))
@@ -57,9 +59,9 @@ static const char *const LLVMLinkageString[17] = {
 char *error = NULL;
 
 // Returns whether a function calls itself
-static bool is_recursive(LLVMValueRef func);
+static bool function_is_recursive(LLVMValueRef func);
 // Returns whether a function calls 'stdlib' functions
-static bool calls_stdlib(LLVMValueRef func);
+static bool function_calls_stdlib(LLVMValueRef func);
 // Given a parameter and an index, it performs """functions"""
 static void handle_parameter(mambo_context *ctx, LLVMTypeKind param, size_t param_idx);
 // Loads the embedded '.llvmbc' section into a MemoryBuffer, otherwise returns
@@ -163,6 +165,36 @@ int func_pre_callback(mambo_context *ctx) {
     assert(mambo_set_source_addr(ctx, llvm_addr) == 0);
   }
 
+  LLVMBasicBlockRef basicBlock = LLVMGetFirstBasicBlock(llvm_func);
+  while(basicBlock != NULL) {
+
+    LLVMValueRef instruction = LLVMGetFirstInstruction(basicBlock);
+    while (instruction != NULL) {
+
+      if (LLVMGetInstructionOpcode(instruction) == LLVMGetElementPtr) {
+        // Check to see if it's an array access
+        if (LLVMGetNumOperands(instruction) < 3)
+          continue;
+
+        LLVMValueRef index = LLVMGetOperand(instruction, 2);
+        LLVMTypeRef Type = LLVMGetGEPSourceElementType(instruction);
+        uint64_t array_size = LLVMGetArrayLength(Type);
+
+        // TODO: insert additional logic for handling other GEP cases
+        // TODO: insert logic for 'statically' checking if access is
+        // out of bounds in cases it can be determined and also
+        // add bound checks in cases it's not possible to statically
+        // determine that
+        MAMBO_LOG("array size: %lu\n", array_size);;
+        MAMBO_LOG("index: %lu\n", LLVMConstIntGetSExtValue(index));
+      }
+
+      instruction = LLVMGetNextInstruction(instruction);
+    }
+
+    basicBlock = LLVMGetNextBasicBlock(basicBlock);
+  }
+
   // void *llvm_addr = (void *)LLVMGetFunctionAddress(EE_ref, mambo_func_name);
   // if (llvm_addr == NULL) {
   //   MAMBO_LOG("LLVM address is null. Skipping substitution.\n");
@@ -193,7 +225,7 @@ int hook_all_functions(mambo_context *ctx) {
   LLVMValueRef current_func = LLVMGetFirstFunction(module);
   while (current_func != NULL) {
     char *func_name = LLVMGetValueName(current_func);
-    is_recursive(current_func);
+    function_is_recursive(current_func);
 
     // Create hooks for the function
     int result = mambo_register_function_cb(ctx, func_name, func_pre_callback,
@@ -341,7 +373,7 @@ static void handle_parameter(mambo_context *ctx, LLVMTypeKind param, size_t para
   }
 }
 
-static bool is_recursive(LLVMValueRef func) {
+static bool function_is_recursive(LLVMValueRef func) {
   const char *function_name = LLVMGetValueName(func);
 
   LLVMBasicBlockRef basic_block = LLVMGetFirstBasicBlock(func);
@@ -369,7 +401,7 @@ static bool is_recursive(LLVMValueRef func) {
   return false;
 }
 
-static bool calls_stdlib(LLVMValueRef func) {
+static bool function_calls_stdlib(LLVMValueRef func) {
   const char *function_name = LLVMGetValueName(func);
 
   LLVMBasicBlockRef basic_block = LLVMGetFirstBasicBlock(func);
@@ -414,30 +446,25 @@ static LLVMMemoryBufferRef read_llvm_bitcode_segment() {
       ehdr = ELF_GETEHDR(elf);
       while ((scn = elf_nextscn(elf, scn)) != NULL) {
         gelf_getshdr(scn, &shdr);
-        const char *section_name = elf_strptr(elf, ehdr->e_shstrndx, shdr.sh_name);
-        if(section_name && strcmp(section_name, ".llvmbc") == 0) {
-          size_t size = shdr.sh_size;
-          MAMBO_LOG("LLVM Bitcode size: %lu\n", size);
+        const char *section_name =
+            elf_strptr(elf, ehdr->e_shstrndx, shdr.sh_name);
+        if (section_name && strcmp(section_name, ".llvmbc") == 0) {
           data = elf_getdata(scn, NULL);
-          goto ret;
+          MAMBO_LOG("LLVM Bitcode size: %lu\n", data->d_size);
+          if (pthread_mutex_unlock(&imap->mutex) != 0) {
+            MAMBO_ERR("Failed to unlock interval map mutex.\n");
+            exit(EXIT_FAILURE);
+          }
+
+          LLVMMemoryBufferRef mem_buf = LLVMCreateMemoryBufferWithMemoryRange(
+              data->d_buf, data->d_size, ".llvmbc", true);
+
+          return mem_buf;
         } // if (section_name == ".llvmbc")
-      } // while elf_nextscn
-    }   // if (elf != NULL)
-  }     // for imap->entry_count
-  goto err;
+      }   // while elf_nextscn
+    }     // if (elf != NULL)
+  }       // for imap->entry_count
 
-ret:
-  if (pthread_mutex_unlock(&imap->mutex) != 0) {
-    MAMBO_ERR("Failed to unlock interval map mutex.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  LLVMMemoryBufferRef mem_buf = LLVMCreateMemoryBufferWithMemoryRange(
-      data->d_buf, data->d_size, ".llvmbc", true);
-
-  return mem_buf;
-
-err:
   if (pthread_mutex_unlock(&imap->mutex) != 0) {
     MAMBO_ERR("Failed to unlock interval map mutex.\n");
     exit(EXIT_FAILURE);

@@ -666,7 +666,9 @@ void main(int argc, char **argv, char **envp) {
   #define ARGDIFF 2
 
   mambo_deliver_callbacks(ENTRY_C, thread_data);
+#if defined(PLUGINS)
   function_watch_add_elf(&global_data.watched_functions, &global_data.exec_allocs);
+#endif
   elf_run(block_address, argv[1], argc-ARGDIFF, &argv[ARGDIFF], envp, &auxv, thread_data);
 }
 

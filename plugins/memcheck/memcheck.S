@@ -185,12 +185,12 @@ memcheck_unalloc:
   MRS X19, NZCV
   MRS X20, FPCR
   MRS X21, FPSR
-  BL push_neon
+  BL push_simd
 
   MOV X3, X29 // frame pointer
   BL memcheck_print_error
 
-  BL pop_neon
+  BL pop_simd
   MSR NZCV, X19
   MSR FPCR, X20
   MSR FPSR, X21
