@@ -38,6 +38,7 @@ DMB                     11010101 00000011 0011aaaa 10111111, a:crm
 ISB                     11010101 00000011 0011aaaa 11011111, a:crm
 SYS                     11010101 00001aaa bbbbcccc dddeeeee, a:op1, b:crn, c:crm, d:op2, e:rt
 MRS_MSR_reg             11010101 00a1bccc ddddeeee fffggggg, a:r, b:o0, c:op1, d:crn, e:crm, f:op2, g:rt
+MRRS_MSRR               11010101 01abbccc ddddeeee fffggggg, a:L, b:op0, c:op1, d:CRn, e:CRm, f:op2, g:Rt
 SYSL                    11010101 00101aaa bbbbcccc dddeeeee, a:op1, b:crn, c:crm, d:op2, e:rt
 SB                      11010101 00000011 0011aaaa 11111111, a:crm
 TBZ_TBNZ                a011011b cccccddd dddddddd dddeeeee, a:b5, b:op, c:b40, d:imm14, e:rt
@@ -100,7 +101,7 @@ simd_three_diff         0ab01110 cc1ddddd eeee00ff fffggggg, a:q, b:u, c:size, d
 simd_three_same         0ab01110 cc1ddddd ccccc1dd dddeeeee, a:q, b:u, c:size, d:rm, c:opcode, d:rn, e:rd
 simd_two_reg            0ab01110 cc10000d dddd10ee eeefffff, a:q, b:u, c:size, d:opcode, e:rn, f:rd
 simd_x_indexed          0ab01111 ccdeffff ggggh0ii iiijjjjj, a:q, b:u, c:size, d:l, e:m, f:rm, g:opcode, h:H, i:rn, j:rd
-simd_fcma		0a101110 cc0ddddd 110ee1ff fffggggg, a:Qq, b:size, c:Rm, d:rot, e:Rn, f:Rd
+simd_fcma               0a101110 bb0ccccc 110dd1ee eeefffff, a:Q, b:size, c:Rm, d:rot, e:Rn, f:Rd
 crypto_aes              01001110 0010100a aaaa10bb bbbccccc, a:opcode, b:rn, c:rd
 crypto_sha_reg3         01011110 000aaaaa 0ccc00dd dddeeeee, a:rm, c:opcode, d:rn, e:rd
 crypto_sha_reg2         01011110 0010100a aaaa10bb bbbccccc, a:opcode, b:rn, c:rd
@@ -115,3 +116,90 @@ float_cvt_fixed         a0011110 bb0ccddd eeeeeeff fffggggg, a:sf, b:type, c:rmo
 float_cvt_int           a0011110 bb1ccddd 000000ee eeefffff, a:sf, b:type, c:rmode, d:opcode, e:rn, f:rd
 lrcpc                   aa111b00 cd1eeeee fggg00hh hhhiiiii, a:size, b:V, c:A, d:R, e:Rs, f:o3, g:opc, h:Rn, i:Rt
 lrcpc2                  aa011001 bb0ccccc cccc00dd dddeeeee, a:size, b:opc, c:imm9, d:Rn, e:Rt
+sve_mult_add_pred       00000100 aa0bbbbb cccdddee eeefffff, a:size, b:zm, c:opc, d:pg, e:zn, f:zda
+sve_arith_pred          00000100 aa0bbbbb 000cccdd dddeeeee, a:size, b:opc, c:pg, d:zm, e:zdn
+sve_int_reduct          00000100 aa0bbbbb 001cccdd dddeeeee, a:size, b:opc, c:pg, d:zm, e:zdn
+sve_shift               00000100 aa0bbbbb 100cccdd dddeeeee, a:size, b:opc, c:pg, d:zm, e:zdn
+sve_unary_arith         00000100 aa0bbbbb 101cccdd dddeeeee, a:size, b:opc, c:pg, d:zm, e:zdn
+sve_add_sub_unpred      00000100 aa1bbbbb 000cccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_log_unpred          00000100 aa1bbbbb 001cccdd dddeeeee, a:opc, b:zm, c:opc2, d:zn, e:zd
+sve_index_gen           00000100 aa1bbbbb 0100ccdd dddeeeee, a:opc, b:imm5, c:opc2, d:rn, e:zd
+sve_stack_alloc         00000100 aa1bbbbb 0101cddd dddeeeee, a:opc, b:rn, c:opc2, d:imm6, e:rd
+sve2_int_mult_unpred    00000100 aa1bbbbb 011cccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_bit_shift_unpred    00000100 aa1bbbbb 100cccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_adr                 00000100 aa1bbbbb 1010ccdd dddeeeee, a:opc, b:zm, c:msz, d:zn, e:zd
+sve_int_misc            00000100 aa1bbbbb 1011ccdd dddeeeee, a:opc, b:zm, c:opc2, d:zn, e:zd
+sve_elem_cnt            00000100 aaaabbbb 11ccccdd dddeeeee, a:opc, b:imm4, c:opc2, d:pattern, e:zdn
+sve_bitwise_imm         00000101 aa0000bb bbbbbbbb bbbccccc, a:opc, b:imm13, c:zdn
+sve_int_wide_imm_pred   00000101 aa01bbbb cccddddd dddeeeee, a:size, b:pg, c:opc, d:imm8, e:zd
+sve_dup_indexed         00000101 aa1bbbbb 001000cc cccddddd, a:imm2, b:tsz, c:zn, d:zd
+sve2_permute_quad       00000101 aa1bcccc 001001dd dddeeeee, a:opc, b:opc2, c:tsz, d:zn, e:zd
+sve_tbl_3srcs           00000101 aa1bbbbb 00101cdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_tbl                 00000101 aa1bbbbb 001100cc cccddddd, a:size, b:zm, c:zn, d:zd
+sve2_tbqx               00000101 aa1bbbbb 001101cc cccddddd, a:size, b:zm, c:zn, d:zd
+sve_permute_vec_unpred  00000101 aa1bbbbb 001110cc cccddddd, a:size, b:opc, c:rn d:zd
+sve_permute_pred        00000101 aa1bbbbb 010ccccd ddd0eeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_permute_vec         00000101 aa1bbbbb 011cccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_permute_vec_pred    00000101 aa1bbbbb 10cdddee eeefffff, a:size, b:opc, c:opc2, d:pg, e:zn, f:rd
+sve_sel                 00000101 aa1bbbbb 11ccccdd dddeeeee, a:size, b:zm, c:pv, d:zn, e:zd
+sve_permute_extract     00000101 0a1bbbbb 000cccdd dddeeeee, a:opc, b:imm8h, c:imm8l, d:zn, e:zd
+sve_permute_segment     00000101 1a1bbbbb 000cccdd dddeeeee, a:opc, b:zm, c:opc2, d:zn, e:zd
+sve_int_cmp             00100100 aa0bbbbb cccdddee eeefgggg, a:size, b:zm, c:opc, d:pg, e:zn, f:ne, g:pd
+sve_int_cmp_uimm        00100100 aa1bbbbb bbcdddee eeefgggg, a:size, b:imm7, c:lt, d:pg, e:zn, f:ne, g:pd
+sve_int_cmp_simm        00100101 aa0bbbbb cccdddee eeefgggg, a:size, b:imm5, c:opc, d:pg, e:zn, f:ne, g:pd
+sve_pred_log            00100101 aa00bbbb 01ccccde eeefgggg, a:opc, b:pm, c:pg, d:opc2, e:pn, f:opc3, g:pd
+sve_prop_break          00100101 aa00bbbb 11cccc0d dddeffff, a:opc, b:pm, c:pg, d:pn, e:B, f:pd
+sve_part_break          00100101 aa01bbbb 01cccc0d dddeffff, a:opc, b:opc2, c:pg, d:pn, e:m, f:pd
+sve_pred_misc           00100101 aa01bbbb 11cccdde eeefgggg, a:opc, b:opc2, c:opc3, d:opc4, e:opc5, f:opc6, g:opc7
+sve_int_cmp_scalar      00100101 aa1bbbbb 00ccccdd dddeffff, a:size, b:rm, c:opc, d:rn, e:eq, f:pd
+sve2_broadcast_pred     00100101 aa1bbbcc 01ddddef fff0gggg, a:opc, b:tszl, c:rv, d:pn, e:s, f:pm, g:pd
+sve2_int_cmp            00100101 aa1bbbbb 01cccddd ddd1eeee, a:size, b:opc, c:opc2, d:opc3, e:opc4
+sve_int_wide_imm        00100101 aa1bbbbb 11cddddd dddeeeee, a:size, b:opc, c:opc2, d:imm8, e:zdn
+sve2_pred_cnt           00100101 aa100bbb 10cccccd dddeeeee, a:size, b:opc, c:opc2, d:pnn, e:rd
+sve_inc_dec_pred_cnt    00100101 aa101bbb 1000cccd dddeeeee, a:size, b:opc, c:opc2, d:pm, e:zdn
+sve_write_ffr           00100101 aa101bbb 1001cccd dddeeeee, a:opc, b:opc2, c:opc3, d:opc4, e:opc5
+sve_int_mult_add_unpred 01000100 aa0bbbbb 0cccccdd dddeeeee, a:sie, b:zm, c:opc, d:zn, e:zda
+sve2_int_pred           01000100 aa0bbbbb 10cdddee eeefffff, a:size, b:opc, c:opc2, d:pg, e:zn, f:zda
+sve2_int_clamp          01000100 aa0bbbbb 11000cdd dddeeeee, a:size, b:zm, c:u, d:zn, e:zd
+sve2_permute_elem_quad  01000100 aa0bbbbb 111cccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_mult_indexed        01000100 aa1bbbbb bbbbbbcc cccddddd, a:size, b:opc, c:zn, d:zda
+sve2_two_dot_vec        01000100 000aaaaa 11001bcc cccddddd, a:zm, b:u, c:zn, d:zda
+sve2_two_dot_index      01000100 100aaaaa 11001bcc cccddddd, a:opc, b:u, c:zn, d:zda
+sve2_int_arith          01000101 aa0bbbbb 0cccccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve2_misc               01000101 aa0bbbbb 10ccccdd dddeeeee, a:opc, b:zm, c:opc2, d:zn, e:zd
+sve2_accum              01000101 aa0bbbbb b11cccdd dddeeeee, a:size, b:opc, c:opc2, d:zm, e:zdn
+sve2_narrow             01000101 aa1bbbbb 0cccccdd dddeeeee, a:opc, b:opc2, c:opc3, d:zn, e:zd
+sve2_match              01000101 aa1bbbbb 100cccdd dddeffff, a:size, b:zm, c:pg, d:zn, e:op, f:pd
+sve2_histseg            01000101 aa1bbbbb 101000cc cccddddd, a:size, b:zm, c:zn, d:zd
+sve2_histcnt            01000101 aa1bbbbb 110cccdd dddeeeee, a:size, b:zm, c:pg, d:zn, e:zd
+sve2_crypto             01000101 aa1bbbbb 111cccdd dddeeeee, a:size, b:opc, c:opc2, d:zm, e:zdn
+sve_fcmla_vec           01100100 aa0bbbbb 0ccdddee eeefffff, a:size, b:zm, c:rot, d:pg, e:zn, f:zda
+sve_fcadd               01100100 aa00000b 100cccdd dddeeeee, a:size, b:rot, c:pg, d:zm, e:zdn
+sve_fcvt                01100100 aa0010bb 101cccdd dddeeeee, a:opc, b:opc2, c:pg, d:zn, e:zd
+sve2_fpairwise          01100100 aa010bbb 100cccdd dddeeeee, a:size, b:opc, c:pg, d:zm, e:zd
+sve2_frec_quad          01100100 aa010bbb 101cccdd dddeeeee, a:size, b:opc, c:pg, d:zn, e:vd
+sve_fmla                01100100 aa1bbbbb 0000ccdd dddeeeee, a:size, b:opc, c:opc2, d:zn, e:zda
+sve_fcmla               01100100 aa1bbbbb 0001ccdd dddeeeee, a:size, b:opc, c:rot, d:zn, e:zda
+sve_fmul                01100100 aa1bbbbb 0010ccdd dddeeeee, a:size, b:opc, c:opc2, d:zn, e:zd
+sve2_fclamp             01100100 aa1bbbbb 001001cc cccddddd, a:size, b:zm, c:zn, d:zd
+sve_wide_fmla_index     01100100 aa1bbbbb 01c0dddd dddddddd, a:opc, b:opc2, c:opc3, d:opc4
+sve_wide_fmla           01100100 aa1bbbbb 10c00ddd dddddddd, a:opc, b:opc2, c:opc3, d:opc4
+sve_fmmla               01100100 aa1bbbbb 111001cc cccddddd, a:opc, b:zm, c:zn, d:zda
+sve_fcm                 01100101 aa0bbbbb c1deeeff fffghhhh, a:size, b:zm, c:opc, d:opc2, e:pg, f:zn, g:opc3, h:pd
+sve_farith_unpred       01100101 aa0bbbbb 000cccdd dddeeeee, a:size, b:zm, c:opc, d:zn, e:zd
+sve_farith_pred         01100101 aa0bbbbb 100cccdd dddeeeee, a:size, b:opc, c:opc2, d:opc3, e:opc4
+sve_unary_pred          01100101 aa0bbbbb 101cccdd dddeeeee, a:size, b:opc, c:pg, d:zn, e:zd
+sve_frec_red            01100101 aa000bbb 001cccdd dddeeeee, a:size, b:opc, c:pg, d:zn, e:vd
+sve_unary_unpred        01100101 aa001bbb 0011ccdd dddeeeee, a:size, b:opc, c:opc2, d:zn, e:zd
+sve_fcm_zero            01100101 aa010bbb 001cccdd dddeffff, a:size, b:opc, c:pg, d:zn, e:ne, f:pd
+sve_fadda               01100101 aa0110bb 001cccdd dddeeeee, a:size, b:opc, c:pd, d:zm, e:vdn
+sve_fnmla_d             01100101 aa1bbbbb cccdddee eeefffff, a:size, b:zm, c:opc, d:pg, e:zn, f:zda
+sve_32_gather           1000010a aaabbbbb cccdddee eeefgggg, a:opc, b:zm, c:msz, d:pg, e:rn, f:opc2, g:prfop
+sve_cont_load           1010010a aaaabbbb cccdddee eeefffff, a:opc, b:imm4, c:opc2, d:pg, e:rn, f:zt
+sve_64_gather           1100010a aaabbbbb cccdddee eeefgggg, a:opc, b:zm, c:opc2, d:pg, e:rn, f:opc3, g:prfop
+sve_cont_store          1110010a aaaabbbb 0c0dddee eeefffff, a:opc, b:imm4, c:opc2, d:pg, e:rn, f:zt
+sve_ntmp_quad           1110010a aaabbbbb 001cccdd dddeeeee, a:opc, b:rm, c:pg, d:zn, e:zt
+sve_ntmp_cont           1110010a aaabbbbb 011cccdd dddeeeee, a:opc, b:rm, c:pg, d:zn, e:zt
+sve_scatter_sign        1110010a aaabbbbb 1c0dddee eeefffff, a:opc, b:zm, c:xs, d:pg, e:rn, f:zt
+sve_scatter             1110010a aaabbbbb 101cccdd dddeeeee, a:opc, b:zm, c:pg, d:rn, e:zt
+sve_cont_imm            1110010a aaaabbbb 111cccdd dddeeeee, a:opc, b:imm4, c:pg, d:rn, e:zt
